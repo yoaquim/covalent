@@ -116,6 +116,21 @@
       background: #2c974b !important;
     }
 
+    .drop-zone-tip {
+      margin-top: 24px;
+      font-size: 12px;
+      opacity: 0.35;
+      max-width: 340px;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .drop-zone-tip a {
+      color: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
     /* Drag overlay */
     .drag-overlay {
       display: none;
@@ -176,6 +191,10 @@
     <div class="drop-zone-text">Drop a Markdown file here</div>
     <div class="drop-zone-hint">or</div>
     <button class="drop-zone-btn" id="drop-zone-open">Open file</button>
+    <div class="drop-zone-tip" id="default-tip">
+      Tip: Right-click any .md file in Finder → Get Info → Open with → Covalent → Change All to set as default viewer.
+      <br><a id="dismiss-tip">dismiss</a>
+    </div>
   </div>
 
   <article class="markdown-body" id="content" style="display:none;"></article>
@@ -312,12 +331,28 @@
 
     themeBtn.addEventListener('click', () => applyTheme(!isDark));
 
-    // --- Keyboard shortcut ---
+    // --- Keyboard shortcuts ---
     document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
         e.preventDefault();
         openFilePicker();
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        if (window.__TAURI__) {
+          window.__TAURI__.core.invoke('open_new_window', { filePath: null });
+        }
+      }
+    });
+
+    // --- Default app tip ---
+    const tipEl = document.getElementById('default-tip');
+    if (localStorage.getItem('tip-dismissed')) {
+      tipEl.style.display = 'none';
+    }
+    document.getElementById('dismiss-tip').addEventListener('click', () => {
+      tipEl.style.display = 'none';
+      localStorage.setItem('tip-dismissed', '1');
     });
 
     // --- Apply initial theme from system preference ---
@@ -339,6 +374,13 @@
     async function initTauri() {
       if (!window.__TAURI__) return;
 
+      // Check if this window was created with a file path
+      if (window.__INITIAL_FILE__) {
+        openFileFromPath(window.__INITIAL_FILE__);
+        return;
+      }
+
+      // Main window: check for files opened at launch
       try {
         const files = await window.__TAURI__.core.invoke('get_opened_files');
         if (files.length > 0) {
@@ -348,8 +390,15 @@
         console.error('Failed to get opened files:', err);
       }
 
+      // Listen for files opened while app is running (from Finder double-click)
       window.__TAURI__.event.listen('file-opened', (event) => {
-        openFileFromPath(event.payload);
+        if (lastMd) {
+          // Already viewing a file — open in new window
+          window.__TAURI__.core.invoke('open_new_window', { filePath: event.payload });
+        } else {
+          // Empty window — load here
+          openFileFromPath(event.payload);
+        }
       });
     }
 
