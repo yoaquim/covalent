@@ -460,11 +460,17 @@
     }
 
     // --- Tauri integration ---
+    let currentFilePath = null;
+
     async function openFileFromPath(filePath) {
       try {
         const md = await window.__TAURI__.core.invoke('read_file', { path: filePath });
         const fileName = filePath.split('/').pop();
+        currentFilePath = filePath;
         renderMarkdown(md, fileName);
+
+        // Start watching for changes
+        await window.__TAURI__.core.invoke('watch_file', { path: filePath });
       } catch (err) {
         console.error('Failed to read file:', err);
       }
@@ -495,6 +501,19 @@
           window.__TAURI__.core.invoke('open_new_window', { filePath: event.payload });
         } else {
           openFileFromPath(event.payload);
+        }
+      });
+
+      // Hot reload: re-render when file changes on disk
+      window.__TAURI__.event.listen('file-changed', async (event) => {
+        if (currentFilePath && event.payload === currentFilePath) {
+          try {
+            const md = await window.__TAURI__.core.invoke('read_file', { path: currentFilePath });
+            const fileName = currentFilePath.split('/').pop();
+            renderMarkdown(md, fileName);
+          } catch (err) {
+            console.error('Failed to reload file:', err);
+          }
         }
       });
     }

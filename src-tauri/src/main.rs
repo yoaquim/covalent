@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use notify::{Watcher, RecursiveMode, Event, EventKind};
 
 use core_foundation::base::TCFType;
 use core_foundation::string::CFString;
@@ -21,6 +22,7 @@ extern "C" {
 
 struct OpenedFiles(Mutex<Vec<String>>);
 struct FrontendReady(AtomicU32);
+struct FileWatcher(Mutex<Option<notify::RecommendedWatcher>>);
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 fn create_window(app: &AppHandle, file_path: Option<&str>) -> Result<(), String> {
@@ -78,6 +80,27 @@ fn set_default_md_viewer() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn watch_file(app: AppHandle, path: String, watcher_state: State<FileWatcher>) -> Result<(), String> {
+    let watch_path = PathBuf::from(&path);
+    let app_handle = app.clone();
+
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+        if let Ok(event) = res {
+            if matches!(event.kind, EventKind::Modify(_)) {
+                let _ = app_handle.emit("file-changed", path.clone());
+            }
+        }
+    }).map_err(|e| e.to_string())?;
+
+    watcher.watch(watch_path.as_path(), RecursiveMode::NonRecursive)
+        .map_err(|e| e.to_string())?;
+
+    // Store watcher so it doesn't get dropped
+    *watcher_state.0.lock().unwrap() = Some(watcher);
+    Ok(())
+}
+
+#[tauri::command]
 fn open_new_window(app: AppHandle, file_path: Option<String>) -> Result<(), String> {
     create_window(&app, file_path.as_deref())
 }
@@ -116,11 +139,13 @@ fn main() {
     tauri::Builder::default()
         .manage(OpenedFiles(Mutex::new(Vec::new())))
         .manage(FrontendReady(AtomicU32::new(0)))
+        .manage(FileWatcher(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             read_file,
             get_opened_files,
             open_new_window,
-            set_default_md_viewer
+            set_default_md_viewer,
+            watch_file
         ])
         .setup(|_app| {
             #[cfg(not(target_os = "macos"))]

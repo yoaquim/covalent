@@ -11,10 +11,12 @@
 - GitHub-flavored Markdown rendering
 - Mermaid diagram support (flowcharts, sequence diagrams, etc.)
 - Syntax-highlighted code blocks
+- Live reload — auto-refreshes when the file changes on disk
 - Light / dark mode
+- Multi-window support (`Cmd+N`)
 - Drag-and-drop file opening
-- Native macOS `.app` (~5MB)
-- File association — set as default viewer for `.md` files
+- File association — set as default viewer for `.md` files on first launch
+- Native macOS `.app` (~5MB, built with Tauri)
 
 ## Install
 
