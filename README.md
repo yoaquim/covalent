@@ -24,7 +24,13 @@ brew install --cask yoaquim/tap/covalent
 
 Download the `.dmg` from [Releases](https://github.com/yoaquim/covalent/releases), open it, and drag to Applications.
 
-> First launch: macOS may warn about an unidentified developer. Right-click the app > Open to bypass.
+After installing (either method), remove the quarantine flag:
+
+```
+xattr -cr /Applications/Covalent.app
+```
+
+> The app isn't code-signed with an Apple Developer certificate, so macOS flags it. This is a one-time step.
 
 ## Build from source
 
