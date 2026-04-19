@@ -1,6 +1,10 @@
-# Covalent
+<p align="center">
+  <img src="app-icon.png" width="128" height="128" alt="Covalent icon">
+</p>
 
-A lightweight Markdown viewer for macOS. Not an editor — just renders `.md` files exactly how they should look.
+<h1 align="center">Covalent</h1>
+
+<p align="center">A lightweight Markdown viewer for macOS.<br>Not an editor — just renders <code>.md</code> files exactly how they should look.</p>
 
 ## Features
 

@@ -116,19 +116,89 @@
       background: #2c974b !important;
     }
 
-    .drop-zone-tip {
-      margin-top: 24px;
-      font-size: 12px;
-      opacity: 0.35;
-      max-width: 340px;
-      text-align: center;
-      line-height: 1.5;
+    /* Default app modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
     }
 
-    .drop-zone-tip a {
-      color: inherit;
-      text-decoration: underline;
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 14px;
+      padding: 28px 32px;
+      max-width: 380px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    body.dark .modal {
+      background: #1c2128;
+    }
+
+    .modal-icon {
+      margin-bottom: 12px;
+    }
+
+    .modal-title {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .modal-text {
+      font-size: 13px;
+      opacity: 0.6;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .modal-btn {
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: 1px solid #d1d9e0;
+      background: none;
+      font-size: 13px;
+      font-weight: 500;
       cursor: pointer;
+      color: inherit;
+    }
+
+    .modal-btn:hover {
+      background: #eaeef2;
+    }
+
+    body.dark .modal-btn {
+      border-color: #30363d;
+    }
+
+    body.dark .modal-btn:hover {
+      background: #21262d;
+    }
+
+    .modal-btn-primary {
+      background: #2da44e;
+      color: #fff;
+      border: none;
+    }
+
+    .modal-btn-primary:hover {
+      background: #2c974b;
     }
 
     /* Drag overlay */
@@ -191,16 +261,34 @@
     <div class="drop-zone-text">Drop a Markdown file here</div>
     <div class="drop-zone-hint">or</div>
     <button class="drop-zone-btn" id="drop-zone-open">Open file</button>
-    <div class="drop-zone-tip" id="default-tip">
-      Tip: Right-click any .md file in Finder → Get Info → Open with → Covalent → Change All to set as default viewer.
-      <br><a id="dismiss-tip">dismiss</a>
-    </div>
   </div>
 
   <article class="markdown-body" id="content" style="display:none;"></article>
 
   <div class="drag-overlay" id="drag-overlay">
     <div class="drag-overlay-inner">Drop to view</div>
+  </div>
+
+  <div class="modal-overlay" id="default-modal">
+    <div class="modal">
+      <div class="modal-icon">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="8" y="4" width="32" height="40" rx="3" stroke="currentColor" stroke-width="2.5" fill="none"/>
+          <path d="M8 12h32" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+          <line x1="14" y1="20" x2="34" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+          <line x1="14" y1="26" x2="30" y2="26" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+          <line x1="14" y1="32" x2="26" y2="32" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+          <circle cx="38" cy="38" r="9" fill="#2da44e"/>
+          <path d="M34.5 38l2.5 2.5 4.5-4.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="modal-title">Set as default Markdown viewer?</div>
+      <div class="modal-text">Double-click any .md file to open it directly in Covalent.</div>
+      <div class="modal-actions">
+        <button class="modal-btn" id="modal-skip">Not now</button>
+        <button class="modal-btn modal-btn-primary" id="modal-set">Set as default</button>
+      </div>
+    </div>
   </div>
 
   <input type="file" id="file-input" accept=".md,.markdown,.mdx,.txt">
@@ -345,14 +433,25 @@
       }
     });
 
-    // --- Default app tip ---
-    const tipEl = document.getElementById('default-tip');
-    if (localStorage.getItem('tip-dismissed')) {
-      tipEl.style.display = 'none';
+    // --- Default app modal ---
+    const modal = document.getElementById('default-modal');
+    if (!localStorage.getItem('default-prompted') && window.__TAURI__) {
+      modal.classList.add('active');
     }
-    document.getElementById('dismiss-tip').addEventListener('click', () => {
-      tipEl.style.display = 'none';
-      localStorage.setItem('tip-dismissed', '1');
+
+    document.getElementById('modal-skip').addEventListener('click', () => {
+      modal.classList.remove('active');
+      localStorage.setItem('default-prompted', '1');
+    });
+
+    document.getElementById('modal-set').addEventListener('click', async () => {
+      try {
+        await window.__TAURI__.core.invoke('set_default_md_viewer');
+      } catch (err) {
+        console.error('Failed to set default:', err);
+      }
+      modal.classList.remove('active');
+      localStorage.setItem('default-prompted', '1');
     });
 
     // --- Apply initial theme from system preference ---
@@ -390,13 +489,11 @@
         console.error('Failed to get opened files:', err);
       }
 
-      // Listen for files opened while app is running (from Finder double-click)
+      // Listen for files opened while app is already running
       window.__TAURI__.event.listen('file-opened', (event) => {
         if (lastMd) {
-          // Already viewing a file — open in new window
           window.__TAURI__.core.invoke('open_new_window', { filePath: event.payload });
         } else {
-          // Empty window — load here
           openFileFromPath(event.payload);
         }
       });

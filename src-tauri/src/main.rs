@@ -8,7 +8,19 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
+use core_foundation::base::TCFType;
+use core_foundation::string::CFString;
+
+extern "C" {
+    fn LSSetDefaultRoleHandlerForContentType(
+        inContentType: core_foundation::string::CFStringRef,
+        inRole: u32,
+        inHandlerBundleID: core_foundation::string::CFStringRef,
+    ) -> i32;
+}
+
 struct OpenedFiles(Mutex<Vec<String>>);
+struct FrontendReady(AtomicU32);
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 fn create_window(app: &AppHandle, file_path: Option<&str>) -> Result<(), String> {
@@ -39,8 +51,30 @@ fn read_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn get_opened_files(state: State<OpenedFiles>) -> Vec<String> {
+fn get_opened_files(state: State<OpenedFiles>, ready: State<FrontendReady>) -> Vec<String> {
+    ready.0.store(1, Ordering::Relaxed);
     state.0.lock().unwrap().drain(..).collect()
+}
+
+#[tauri::command]
+fn set_default_md_viewer() -> Result<(), String> {
+    const K_LS_ROLES_VIEWER: u32 = 0x00000002;
+    let content_type = CFString::new("net.daringfireball.markdown");
+    let bundle_id = CFString::new("com.yoaquim.mdviewer");
+
+    let result = unsafe {
+        LSSetDefaultRoleHandlerForContentType(
+            content_type.as_concrete_TypeRef(),
+            K_LS_ROLES_VIEWER,
+            bundle_id.as_concrete_TypeRef(),
+        )
+    };
+
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(format!("Failed to set default handler (error {})", result))
+    }
 }
 
 #[tauri::command]
@@ -49,21 +83,31 @@ fn open_new_window(app: AppHandle, file_path: Option<String>) -> Result<(), Stri
 }
 
 fn handle_opened_files(app: &AppHandle, paths: Vec<PathBuf>) {
-    // Check if the main window has a file loaded by checking if any windows exist beyond "main"
     let files: Vec<String> = paths
         .iter()
         .filter_map(|p| p.to_str().map(String::from))
         .collect();
 
-    for file in &files {
-        // If the main window exists and is showing the drop zone, send to it
-        // Otherwise create a new window
+    if files.is_empty() {
+        return;
+    }
+
+    let is_ready = app
+        .try_state::<FrontendReady>()
+        .map(|r| r.0.load(Ordering::Relaxed) == 1)
+        .unwrap_or(false);
+
+    if is_ready {
+        // Frontend is loaded — emit events
         if let Some(main_window) = app.get_webview_window("main") {
-            // Try emitting to main first — the frontend will decide
-            // whether to use it or request a new window
-            let _ = main_window.emit("file-opened", file.clone());
-        } else {
-            let _ = create_window(app, Some(file));
+            for file in &files {
+                let _ = main_window.emit("file-opened", file.clone());
+            }
+        }
+    } else {
+        // Frontend not ready — store for pickup via get_opened_files
+        if let Some(state) = app.try_state::<OpenedFiles>() {
+            state.0.lock().unwrap().extend(files);
         }
     }
 }
@@ -71,10 +115,12 @@ fn handle_opened_files(app: &AppHandle, paths: Vec<PathBuf>) {
 fn main() {
     tauri::Builder::default()
         .manage(OpenedFiles(Mutex::new(Vec::new())))
+        .manage(FrontendReady(AtomicU32::new(0)))
         .invoke_handler(tauri::generate_handler![
             read_file,
             get_opened_files,
-            open_new_window
+            open_new_window,
+            set_default_md_viewer
         ])
         .setup(|_app| {
             #[cfg(not(target_os = "macos"))]
