@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Covalent</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.8.1/github-markdown-light.min.css" id="theme-light">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.8.1/github-markdown-dark.min.css" id="theme-dark" disabled>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" id="hljs-light">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-dark" disabled>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      color: #1f2328;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    body.dark {
+      background: #0d1117;
+      color: #e6edf3;
+    }
+
+    /* Drag region */
+    .drag-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      z-index: 99;
+      -webkit-app-region: drag;
+    }
+
+    /* Floating theme toggle */
+    #theme-btn {
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      z-index: 100;
+      background: rgba(246, 248, 250, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid #d1d9e0;
+      border-radius: 8px;
+      padding: 6px 8px;
+      cursor: pointer;
+      color: inherit;
+      line-height: 0;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    #theme-btn:hover {
+      background: #eaeef2;
+    }
+
+    body.dark #theme-btn {
+      background: rgba(22, 27, 34, 0.8);
+      border-color: #30363d;
+    }
+
+    body.dark #theme-btn:hover {
+      background: #21262d;
+    }
+
+    /* Content area */
+    .markdown-body {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 48px 40px 32px;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 49px);
+      gap: 16px;
+      user-select: none;
+    }
+
+    .drop-zone-icon {
+      font-size: 64px;
+      opacity: 0.2;
+    }
+
+    .drop-zone-text {
+      font-size: 18px;
+      opacity: 0.5;
+    }
+
+    .drop-zone-hint {
+      font-size: 13px;
+      opacity: 0.35;
+    }
+
+    .drop-zone-btn {
+      margin-top: 8px;
+      padding: 8px 20px !important;
+      font-size: 14px !important;
+      background: #2da44e !important;
+      color: #fff !important;
+      border: none !important;
+      border-radius: 6px !important;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .drop-zone-btn:hover {
+      background: #2c974b !important;
+    }
+
+    /* Drag overlay */
+    .drag-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      background: rgba(0,0,0,0.5);
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drag-overlay.active {
+      display: flex;
+    }
+
+    .drag-overlay-inner {
+      background: #fff;
+      border: 3px dashed #2da44e;
+      border-radius: 16px;
+      padding: 60px 80px;
+      font-size: 20px;
+      font-weight: 600;
+      color: #2da44e;
+    }
+
+    body.dark .drag-overlay-inner {
+      background: #161b22;
+    }
+
+    /* Mermaid */
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      margin: 16px 0;
+    }
+
+    /* Hide file input */
+    #file-input { display: none; }
+  </style>
+</head>
+<body>
+  <div class="drag-bar" data-tauri-drag-region></div>
+  <button id="theme-btn" title="Toggle dark mode">
+    <svg id="icon-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <circle cx="8" cy="8" r="3"/>
+      <line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/>
+      <line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/>
+      <line x1="3.05" y1="3.05" x2="4.46" y2="4.46"/><line x1="11.54" y1="11.54" x2="12.95" y2="12.95"/>
+      <line x1="3.05" y1="12.95" x2="4.46" y2="11.54"/><line x1="11.54" y1="4.46" x2="12.95" y2="3.05"/>
+    </svg>
+    <svg id="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="display:none;">
+      <path d="M13.5 8.5a5.5 5.5 0 1 1-7-7 4.5 4.5 0 0 0 7 7z"/>
+    </svg>
+  </button>
+
+  <div id="drop-zone" class="drop-zone">
+    <div class="drop-zone-icon">&#128196;</div>
+    <div class="drop-zone-text">Drop a Markdown file here</div>
+    <div class="drop-zone-hint">or</div>
+    <button class="drop-zone-btn" id="drop-zone-open">Open file</button>
+  </div>
+
+  <article class="markdown-body" id="content" style="display:none;"></article>
+
+  <div class="drag-overlay" id="drag-overlay">
+    <div class="drag-overlay-inner">Drop to view</div>
+  </div>
+
+  <input type="file" id="file-input" accept=".md,.markdown,.mdx,.txt">
+
+  <script>
+    const content = document.getElementById('content');
+    const dropZone = document.getElementById('drop-zone');
+    const dragOverlay = document.getElementById('drag-overlay');
+    const fileInput = document.getElementById('file-input');
+    const themeBtn = document.getElementById('theme-btn');
+    const dropZoneOpen = document.getElementById('drop-zone-open');
+
+    let isDark = false;
+    let lastMd = '';
+    let lastName = '';
+
+    // --- Marked setup ---
+    const renderer = new marked.Renderer();
+
+    renderer.code = function({ text, lang }) {
+      if (lang === 'mermaid') {
+        return `<pre class="mermaid">${text}</pre>`;
+      }
+      try {
+        const highlighted = hljs.highlight(text, { language: lang || 'plaintext', ignoreIllegals: true }).value;
+        return `<pre><code class="hljs language-${lang || 'plaintext'}">${highlighted}</code></pre>`;
+      } catch {
+        return `<pre><code>${text}</code></pre>`;
+      }
+    };
+
+    marked.setOptions({ renderer, gfm: true, breaks: false });
+
+    // --- Mermaid setup ---
+    const mermaidLightConfig = {
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#dce6f0',
+        primaryTextColor: '#1f2328',
+        primaryBorderColor: '#a0aec0',
+        lineColor: '#4a5568',
+        secondaryColor: '#e2e8f0',
+        tertiaryColor: '#f7fafc',
+        background: '#ffffff',
+        mainBkg: '#dce6f0',
+        nodeBorder: '#a0aec0',
+        clusterBkg: '#f7fafc',
+        titleColor: '#1f2328',
+        edgeLabelBackground: '#ffffff',
+      }
+    };
+
+    const mermaidDarkConfig = {
+      startOnLoad: false,
+      theme: 'dark',
+    };
+
+    mermaid.initialize(mermaidLightConfig);
+
+    // --- Rendering ---
+    async function renderMarkdown(md, fileName) {
+      lastMd = md;
+      lastName = fileName;
+
+      content.innerHTML = marked.parse(md);
+      content.style.display = '';
+      dropZone.style.display = 'none';
+      document.title = fileName ? `${fileName} - Covalent` : 'Covalent';
+
+      mermaid.initialize(isDark ? mermaidDarkConfig : mermaidLightConfig);
+      await mermaid.run({ querySelector: '.mermaid' });
+    }
+
+    // --- File handling ---
+    function handleFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => renderMarkdown(reader.result, file.name);
+      reader.readAsText(file);
+    }
+
+    // --- Drag and drop ---
+    let dragCounter = 0;
+
+    document.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      dragOverlay.classList.add('active');
+    });
+
+    document.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        dragOverlay.classList.remove('active');
+      }
+    });
+
+    document.addEventListener('dragover', (e) => e.preventDefault());
+
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dragOverlay.classList.remove('active');
+      const file = e.dataTransfer.files[0];
+      handleFile(file);
+    });
+
+    // --- File picker ---
+    function openFilePicker() { fileInput.click(); }
+    fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+    dropZoneOpen.addEventListener('click', openFilePicker);
+
+    // --- Theme toggle ---
+    function applyTheme(dark) {
+      isDark = dark;
+      document.body.classList.toggle('dark', dark);
+      document.getElementById('theme-light').disabled = dark;
+      document.getElementById('theme-dark').disabled = !dark;
+      document.getElementById('hljs-light').disabled = dark;
+      document.getElementById('hljs-dark').disabled = !dark;
+      document.getElementById('icon-sun').style.display = dark ? 'none' : 'block';
+      document.getElementById('icon-moon').style.display = dark ? 'block' : 'none';
+      if (lastMd) renderMarkdown(lastMd, lastName);
+    }
+
+    themeBtn.addEventListener('click', () => applyTheme(!isDark));
+
+    // --- Keyboard shortcut ---
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
+        e.preventDefault();
+        openFilePicker();
+      }
+    });
+
+    // --- Apply initial theme from system preference ---
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      applyTheme(true);
+    }
+
+    // --- Tauri integration ---
+    async function openFileFromPath(filePath) {
+      try {
+        const md = await window.__TAURI__.core.invoke('read_file', { path: filePath });
+        const fileName = filePath.split('/').pop();
+        renderMarkdown(md, fileName);
+      } catch (err) {
+        console.error('Failed to read file:', err);
+      }
+    }
+
+    async function initTauri() {
+      if (!window.__TAURI__) return;
+
+      try {
+        const files = await window.__TAURI__.core.invoke('get_opened_files');
+        if (files.length > 0) {
+          openFileFromPath(files[0]);
+        }
+      } catch (err) {
+        console.error('Failed to get opened files:', err);
+      }
+
+      window.__TAURI__.event.listen('file-opened', (event) => {
+        openFileFromPath(event.payload);
+      });
+    }
+
+    initTauri();
+  </script>
+</body>
+</html>
