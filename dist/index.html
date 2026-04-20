@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.8.1/github-markdown-dark.min.css" id="theme-dark" disabled>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" id="hljs-light">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-dark" disabled>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
@@ -230,6 +232,14 @@
       background: #161b22;
     }
 
+    /* Math blocks */
+    .math-block {
+      display: flex;
+      justify-content: center;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+
     /* Mermaid */
     .mermaid {
       display: flex;
@@ -321,6 +331,36 @@
     };
 
     marked.setOptions({ renderer, gfm: true, breaks: false });
+
+    // --- KaTeX math extension ---
+    marked.use({
+      extensions: [
+        {
+          name: 'blockMath',
+          level: 'block',
+          start(src) { return src.indexOf('$$'); },
+          tokenizer(src) {
+            const match = src.match(/^\$\$([\s\S]+?)\$\$/);
+            if (match) return { type: 'blockMath', raw: match[0], text: match[1].trim() };
+          },
+          renderer(token) {
+            return `<div class="math-block">${katex.renderToString(token.text, { displayMode: true, throwOnError: false })}</div>`;
+          }
+        },
+        {
+          name: 'inlineMath',
+          level: 'inline',
+          start(src) { return src.indexOf('$'); },
+          tokenizer(src) {
+            const match = src.match(/^\$([^\$\n]+?)\$/);
+            if (match) return { type: 'inlineMath', raw: match[0], text: match[1].trim() };
+          },
+          renderer(token) {
+            return katex.renderToString(token.text, { displayMode: false, throwOnError: false });
+          }
+        }
+      ]
+    });
 
     // --- Mermaid setup ---
     const mermaidLightConfig = {
