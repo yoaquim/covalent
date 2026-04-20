@@ -50,6 +50,44 @@ jobs:
           draft: false
           generate_release_notes: true
 
+      - name: Update Homebrew tap
+        if: matrix.os == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          DMG_PATH=$(ls src-tauri/target/release/bundle/dmg/*.dmg)
+          SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
+
+          cat > /tmp/covalent.rb << FORMULA
+          cask "covalent" do
+            version "$VERSION"
+            sha256 "$SHA256"
+
+            url "https://github.com/yoaquim/covalent/releases/download/v#{version}/Covalent_#{version}_aarch64.dmg"
+            name "Covalent"
+            desc "Native Markdown viewer with math, diagrams, and syntax highlighting"
+            homepage "https://github.com/yoaquim/covalent"
+
+            app "Covalent.app"
+
+            postflight do
+              system_command "/usr/bin/xattr",
+                             args: ["-cr", "#{appdir}/Covalent.app"]
+            end
+          end
+          FORMULA
+
+          # Remove leading whitespace from heredoc
+          sed -i '' 's/^          //' /tmp/covalent.rb
+
+          FILE_SHA=$(gh api repos/yoaquim/homebrew-tap/contents/Casks/covalent.rb --jq '.sha')
+          gh api repos/yoaquim/homebrew-tap/contents/Casks/covalent.rb \
+            -X PUT \
+            -f message="Update Covalent to ${VERSION}" \
+            -f content="$(base64 -i /tmp/covalent.rb)" \
+            -f sha="$FILE_SHA"
+
       - name: Upload to Release (Windows)
         if: matrix.os == 'windows-latest'
         uses: softprops/action-gh-release@v2
