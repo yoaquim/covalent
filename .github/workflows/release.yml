@@ -2,8 +2,7 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
 
 jobs:
   build:
@@ -20,6 +19,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -46,10 +53,20 @@ jobs:
       - name: Build
         run: npx tauri build
 
+      - name: Create tag
+        if: matrix.os == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          git tag -f "v${VERSION}"
+          git push -f origin "v${VERSION}"
+
       - name: Upload to Release (macOS)
         if: matrix.os == 'macos-latest'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}
           files: |
             src-tauri/target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/macos/*.app
@@ -61,7 +78,7 @@ jobs:
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          VERSION=${{ steps.version.outputs.version }}
           DMG_PATH=$(ls src-tauri/target/release/bundle/dmg/*.dmg)
           SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
 
@@ -103,6 +120,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
           draft: false
