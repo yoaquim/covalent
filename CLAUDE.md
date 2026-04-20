@@ -6,7 +6,7 @@ Lightweight native Markdown viewer built with Tauri 2 (Rust + HTML/JS). Viewer o
 
 - **Backend:** Rust / Tauri 2
 - **Frontend:** Single `dist/index.html` — vanilla JS, no build step
-- **Rendering:** marked.js (GFM), highlight.js (syntax), mermaid (diagrams)
+- **Rendering:** marked.js (GFM), highlight.js (syntax), mermaid (diagrams), KaTeX (math)
 - **All JS/CSS loaded from CDN** — no bundler
 
 ## Project Structure
@@ -38,7 +38,8 @@ npx tauri build          # Build production .app/.dmg
 
 ## Platform
 
-Currently macOS only. Release CI runs on `macos-latest`, outputs `.dmg` + `.app`.
+macOS and Windows. Release CI builds both (`macos-latest` → `.dmg`, `windows-latest` → `.exe` via NSIS).
+macOS-specific code (core-foundation FFI, title bar overlay, `set_default_md_viewer`, `RunEvent::Opened`, `handle_opened_files`) is gated behind `#[cfg(target_os = "macos")]`.
 
 ## Conventions
 
