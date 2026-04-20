@@ -358,9 +358,12 @@
         {
           name: 'inlineMath',
           level: 'inline',
-          start(src) { return src.indexOf('$'); },
+          start(src) {
+            const match = src.match(/\$(?=[^\s$])/);
+            return match ? match.index : -1;
+          },
           tokenizer(src) {
-            const match = src.match(/^\$([^\$\n]+?)\$/);
+            const match = src.match(/^\$([^\s$](?:[^$\n]*?[^\s$])?)\$(?![\w$])/);
             if (match) return { type: 'inlineMath', raw: match[0], text: match[1].trim() };
           },
           renderer(token) {
@@ -465,7 +468,10 @@
       if (lastMd) renderMarkdown(lastMd, lastName);
     }
 
-    themeBtn.addEventListener('click', () => applyTheme(!isDark));
+    themeBtn.addEventListener('click', () => {
+      applyTheme(!isDark);
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    });
 
     // --- Keyboard shortcuts ---
     document.addEventListener('keydown', (e) => {
@@ -502,8 +508,11 @@
       localStorage.setItem('default-prompted', '1');
     });
 
-    // --- Apply initial theme from system preference ---
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    // --- Apply saved theme or system preference ---
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme !== null) {
+      applyTheme(savedTheme === 'dark');
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       applyTheme(true);
     }
 

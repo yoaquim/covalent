@@ -6,7 +6,8 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "test": "node tests/math-regex.test.mjs && cd src-tauri && cargo test"
   },
   "keywords": [],
   "author": "",

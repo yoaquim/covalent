@@ -144,6 +144,54 @@ fn handle_opened_files(app: &AppHandle, paths: Vec<PathBuf>) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn read_file_returns_contents() {
+        let dir = std::env::temp_dir().join("covalent_test_read");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("test.md");
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(b"# Hello\nWorld").unwrap();
+
+        let result = read_file(path.to_str().unwrap().to_string());
+        assert_eq!(result.unwrap(), "# Hello\nWorld");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_file_returns_error_for_missing() {
+        let result = read_file("/nonexistent/path/file.md".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to read"));
+    }
+
+    #[test]
+    fn path_escape_backslashes() {
+        let path = r"C:\Users\test\file.md";
+        let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
+        assert_eq!(escaped, r"C:\\Users\\test\\file.md");
+    }
+
+    #[test]
+    fn path_escape_quotes() {
+        let path = r#"/path/to/"quoted".md"#;
+        let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
+        assert_eq!(escaped, r#"/path/to/\"quoted\".md"#);
+    }
+
+    #[test]
+    fn window_label_increments() {
+        let a = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let b = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed);
+        assert_eq!(b, a + 1);
+    }
+}
+
 fn main() {
     let mut builder = tauri::Builder::default()
         .manage(OpenedFiles(Mutex::new(Vec::new())))
