@@ -113,6 +113,7 @@ fn open_new_window(app: AppHandle, file_path: Option<String>) -> Result<(), Stri
     create_window(&app, file_path.as_deref())
 }
 
+#[cfg(target_os = "macos")]
 fn handle_opened_files(app: &AppHandle, paths: Vec<PathBuf>) {
     let files: Vec<String> = paths
         .iter()

@@ -4,7 +4,7 @@
 
 <h1 align="center">Covalent</h1>
 
-<p align="center">A lightweight Markdown viewer for macOS and Windows.<br>Not an editor — just renders <code>.md</code> files exactly how they should look.</p>
+<p align="center">A native Markdown viewer for macOS and Windows. Renders <code>.md</code> files with full support for GitHub-flavored Markdown, math equations, diagrams, and syntax highlighting. No editing, no workspace — just open a file and read.</p>
 
 ## Features
 
