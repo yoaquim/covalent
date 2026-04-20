@@ -193,13 +193,14 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            if let tauri::RunEvent::Opened { urls } = event {
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = _event {
                 let files: Vec<PathBuf> = urls
                     .into_iter()
                     .filter_map(|url| url.to_file_path().ok())
                     .collect();
-                handle_opened_files(app, files);
+                handle_opened_files(_app, files);
             }
         });
 }
