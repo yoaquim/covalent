@@ -83,12 +83,12 @@ jobs:
           sed -i '' "s/SHA256_PLACEHOLDER/$SHA256/" /tmp/covalent.rb
 
           CONTENT=$(base64 -i /tmp/covalent.rb)
-          FILE_SHA=$(curl -s -H "Authorization: token $TAP_TOKEN" \
+          FILE_SHA=$(curl -s -H "Authorization: Bearer $TAP_TOKEN" \
             https://api.github.com/repos/yoaquim/homebrew-tap/contents/Casks/covalent.rb \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['sha'])")
 
           curl -s -X PUT \
-            -H "Authorization: token $TAP_TOKEN" \
+            -H "Authorization: Bearer $TAP_TOKEN" \
             -H "Content-Type: application/json" \
             https://api.github.com/repos/yoaquim/homebrew-tap/contents/Casks/covalent.rb \
             -d "{\"message\":\"Update Covalent to ${VERSION}\",\"content\":\"${CONTENT}\",\"sha\":\"${FILE_SHA}\"}"
