@@ -7,7 +7,14 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            targets: dmg
+          - os: windows-latest
+            targets: nsis
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
 
@@ -33,11 +40,21 @@ jobs:
       - name: Build
         run: npx tauri build
 
-      - name: Upload to Release
+      - name: Upload to Release (macOS)
+        if: matrix.os == 'macos-latest'
         uses: softprops/action-gh-release@v2
         with:
           files: |
             src-tauri/target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/macos/*.app
+          draft: false
+          generate_release_notes: true
+
+      - name: Upload to Release (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/release/bundle/nsis/*.exe
           draft: false
           generate_release_notes: true

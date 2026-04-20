@@ -1,5 +1,5 @@
 [package]
-name = "md-viewer"
+name = "covalent"
 version = "1.0.0"
 edition = "2021"
 
@@ -11,5 +11,7 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
+notify = "7"
+
+[target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
-notify = { version = "7", features = ["macos_fsevent"] }

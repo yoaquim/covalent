@@ -379,6 +379,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "covalent"
+version = "1.0.0"
+dependencies = [
+ "core-foundation",
+ "notify",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "url",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1868,19 +1881,6 @@ name = "matches"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
-
-[[package]]
-name = "md-viewer"
-version = "1.0.0"
-dependencies = [
- "core-foundation",
- "notify",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "url",
-]
 
 [[package]]
 name = "memchr"

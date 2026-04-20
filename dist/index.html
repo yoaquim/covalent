@@ -311,9 +311,17 @@
     const themeBtn = document.getElementById('theme-btn');
     const dropZoneOpen = document.getElementById('drop-zone-open');
 
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     let isDark = false;
     let lastMd = '';
     let lastName = '';
+
+    // --- Platform adjustments ---
+    if (!isMac) {
+      document.querySelector('.drag-bar').style.display = 'none';
+      document.querySelector('.markdown-body').style.paddingTop = '24px';
+      document.getElementById('theme-btn').style.top = '8px';
+    }
 
     // --- Marked setup ---
     const renderer = new marked.Renderer();
@@ -473,9 +481,9 @@
       }
     });
 
-    // --- Default app modal ---
+    // --- Default app modal (macOS only) ---
     const modal = document.getElementById('default-modal');
-    if (!localStorage.getItem('default-prompted') && window.__TAURI__) {
+    if (isMac && !localStorage.getItem('default-prompted') && window.__TAURI__) {
       modal.classList.add('active');
     }
 
@@ -505,7 +513,7 @@
     async function openFileFromPath(filePath) {
       try {
         const md = await window.__TAURI__.core.invoke('read_file', { path: filePath });
-        const fileName = filePath.split('/').pop();
+        const fileName = filePath.split(/[\\/]/).pop();
         currentFilePath = filePath;
         renderMarkdown(md, fileName);
 

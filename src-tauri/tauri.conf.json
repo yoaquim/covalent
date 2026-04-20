@@ -11,7 +11,6 @@
       {
         "label": "main",
         "title": "",
-        "titleBarStyle": "Overlay",
         "width": 1000,
         "height": 750,
         "dragDropEnabled": false
@@ -35,6 +34,11 @@
       "dmg": {
         "appPosition": { "x": 180, "y": 170 },
         "applicationFolderPosition": { "x": 480, "y": 170 }
+      }
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "both"
       }
     },
     "fileAssociations": [

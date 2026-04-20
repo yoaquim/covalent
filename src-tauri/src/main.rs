@@ -9,9 +9,12 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use notify::{Watcher, RecursiveMode, Event, EventKind};
 
+#[cfg(target_os = "macos")]
 use core_foundation::base::TCFType;
+#[cfg(target_os = "macos")]
 use core_foundation::string::CFString;
 
+#[cfg(target_os = "macos")]
 extern "C" {
     fn LSSetDefaultRoleHandlerForContentType(
         inContentType: core_foundation::string::CFStringRef,
@@ -32,8 +35,12 @@ fn create_window(app: &AppHandle, file_path: Option<&str>) -> Result<(), String>
     let mut builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::default())
         .title("")
         .inner_size(1000.0, 750.0)
-        .title_bar_style(tauri::TitleBarStyle::Overlay)
         .disable_drag_drop_handler();
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay);
+    }
 
     if let Some(path) = file_path {
         let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
@@ -58,6 +65,7 @@ fn get_opened_files(state: State<OpenedFiles>, ready: State<FrontendReady>) -> V
     state.0.lock().unwrap().drain(..).collect()
 }
 
+#[cfg(target_os = "macos")]
 #[tauri::command]
 fn set_default_md_viewer() -> Result<(), String> {
     const K_LS_ROLES_VIEWER: u32 = 0x00000002;
@@ -136,17 +144,33 @@ fn handle_opened_files(app: &AppHandle, paths: Vec<PathBuf>) {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .manage(OpenedFiles(Mutex::new(Vec::new())))
         .manage(FrontendReady(AtomicU32::new(0)))
-        .manage(FileWatcher(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![
+        .manage(FileWatcher(Mutex::new(None)));
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.invoke_handler(tauri::generate_handler![
             read_file,
             get_opened_files,
             open_new_window,
             set_default_md_viewer,
             watch_file
-        ])
+        ]);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        builder = builder.invoke_handler(tauri::generate_handler![
+            read_file,
+            get_opened_files,
+            open_new_window,
+            watch_file
+        ]);
+    }
+
+    builder
         .setup(|_app| {
             #[cfg(not(target_os = "macos"))]
             {
