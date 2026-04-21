@@ -247,8 +247,55 @@
       margin: 16px 0;
     }
 
+    /* Print button */
+    #print-btn {
+      position: fixed;
+      top: 12px;
+      right: 52px;
+      z-index: 100;
+      background: rgba(246, 248, 250, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid #d1d9e0;
+      border-radius: 8px;
+      padding: 6px 8px;
+      cursor: pointer;
+      color: inherit;
+      line-height: 0;
+      transition: background 0.15s, border-color 0.15s;
+      display: none;
+    }
+
+    #print-btn:hover {
+      background: #eaeef2;
+    }
+
+    body.dark #print-btn {
+      background: rgba(22, 27, 34, 0.8);
+      border-color: #30363d;
+    }
+
+    body.dark #print-btn:hover {
+      background: #21262d;
+    }
+
     /* Hide file input */
     #file-input { display: none; }
+
+    /* Print styles */
+    @media print {
+      .drag-bar, #theme-btn, #print-btn, .drop-zone,
+      .drag-overlay, .modal-overlay, #file-input { display: none !important; }
+
+      body, body.dark {
+        background: #ffffff !important;
+        color: #1f2328 !important;
+      }
+
+      .markdown-body {
+        padding: 0 !important;
+        max-width: none !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -263,6 +310,14 @@
     </svg>
     <svg id="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="display:none;">
       <path d="M13.5 8.5a5.5 5.5 0 1 1-7-7 4.5 4.5 0 0 0 7 7z"/>
+    </svg>
+  </button>
+
+  <button id="print-btn" title="Print (Cmd/Ctrl+P)">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 6V2h8v4"/>
+      <rect x="2" y="6" width="12" height="6" rx="1"/>
+      <path d="M4 12v2h8v-2"/>
     </svg>
   </button>
 
@@ -311,6 +366,7 @@
     const themeBtn = document.getElementById('theme-btn');
     const dropZoneOpen = document.getElementById('drop-zone-open');
 
+    const printBtn = document.getElementById('print-btn');
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     let isDark = false;
     let lastMd = '';
@@ -321,6 +377,7 @@
       document.querySelector('.drag-bar').style.display = 'none';
       document.querySelector('.markdown-body').style.paddingTop = '24px';
       document.getElementById('theme-btn').style.top = '8px';
+      printBtn.style.top = '8px';
     }
 
     // --- Marked setup ---
@@ -408,6 +465,7 @@
       content.innerHTML = marked.parse(md);
       content.style.display = '';
       dropZone.style.display = 'none';
+      printBtn.style.display = '';
       document.title = fileName ? `${fileName} - Covalent` : 'Covalent';
 
       mermaid.initialize(isDark ? mermaidDarkConfig : mermaidLightConfig);
@@ -473,6 +531,9 @@
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
     });
 
+    // --- Print ---
+    printBtn.addEventListener('click', () => window.print());
+
     // --- Keyboard shortcuts ---
     document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
@@ -484,6 +545,10 @@
         if (window.__TAURI__) {
           window.__TAURI__.core.invoke('open_new_window', { filePath: null });
         }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+        e.preventDefault();
+        if (lastMd) window.print();
       }
     });
 

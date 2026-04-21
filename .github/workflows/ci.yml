@@ -45,7 +45,7 @@ jobs:
         run: npm install
 
       - name: Run JS tests
-        run: node tests/math-regex.test.mjs
+        run: node tests/frontend.test.mjs
 
       - name: Run Rust tests
         run: cd src-tauri && cargo test

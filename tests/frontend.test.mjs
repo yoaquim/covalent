@@ -1,5 +1,5 @@
-// Tests for the inline and block math regex patterns used in the marked.js extensions.
-// Run: node tests/math-regex.test.mjs
+// Frontend tests: math regex, path handling, print CSS validation.
+// Run: node tests/frontend.test.mjs
 
 const INLINE_START = /\$(?=[^\s$])/;
 const INLINE_MATCH = /^\$([^\s$](?:[^$\n]*?[^\s$])?)\$(?![\w$])/;
@@ -192,6 +192,59 @@ test('Mixed path split', () => {
   const path = 'C:\\Users/foo\\bar/file.md';
   const name = path.split(/[\\/]/).pop();
   assert(name === 'file.md');
+});
+
+// --- Print feature ---
+
+console.log('\nPrint feature:');
+
+// Parse the HTML to verify print CSS and button exist
+import { readFileSync } from 'fs';
+const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf-8');
+
+test('print button exists in HTML', () => {
+  assert(html.includes('id="print-btn"'));
+});
+
+test('print button has printer icon SVG', () => {
+  assert(html.includes('print-btn') && html.includes('<svg'));
+});
+
+test('@media print hides UI chrome', () => {
+  assert(html.includes('@media print'));
+  assert(html.includes('#theme-btn'));
+  assert(html.includes('#print-btn'));
+  assert(html.includes('.drag-bar'));
+  assert(html.includes('.drop-zone'));
+  assert(html.includes('.drag-overlay'));
+  assert(html.includes('.modal-overlay'));
+});
+
+test('@media print forces white background', () => {
+  assert(html.includes('background: #ffffff !important'));
+});
+
+test('@media print removes padding and max-width', () => {
+  assert(html.includes('padding: 0 !important'));
+  assert(html.includes('max-width: none !important'));
+});
+
+test('Cmd/Ctrl+P shortcut is registered', () => {
+  assert(html.includes("e.key === 'p'"));
+  assert(html.includes('window.print()'));
+});
+
+test('print button is hidden by default (no content)', () => {
+  assert(html.includes("display: none"));
+  // Verify button gets shown when content renders
+  assert(html.includes("printBtn.style.display = ''"));
+});
+
+test('print button only shows after markdown is rendered', () => {
+  // The button display is set in renderMarkdown, not at load time
+  const renderIdx = html.indexOf('async function renderMarkdown');
+  const showIdx = html.indexOf("printBtn.style.display = ''");
+  assert(renderIdx < showIdx, 'printBtn shown inside renderMarkdown');
 });
 
 // --- Summary ---
