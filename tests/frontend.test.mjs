@@ -224,8 +224,8 @@ test('@media print forces white background', () => {
   assert(html.includes('background: #ffffff !important'));
 });
 
-test('@media print removes padding and max-width', () => {
-  assert(html.includes('padding: 0 !important'));
+test('@media print sets print padding and removes max-width', () => {
+  assert(html.includes('padding: 20px 40px !important'));
   assert(html.includes('max-width: none !important'));
 });
 

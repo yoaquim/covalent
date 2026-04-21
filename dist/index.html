@@ -292,7 +292,7 @@
       }
 
       .markdown-body {
-        padding: 0 !important;
+        padding: 20px 40px !important;
         max-width: none !important;
       }
     }
@@ -532,7 +532,14 @@
     });
 
     // --- Print ---
-    printBtn.addEventListener('click', () => window.print());
+    function doPrint() {
+      if (window.__TAURI__) {
+        window.__TAURI__.core.invoke('plugin:webview|print');
+      } else {
+        window.print();
+      }
+    }
+    printBtn.addEventListener('click', doPrint);
 
     // --- Keyboard shortcuts ---
     document.addEventListener('keydown', (e) => {
@@ -548,7 +555,7 @@
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
         e.preventDefault();
-        if (lastMd) window.print();
+        if (lastMd) doPrint();
       }
     });
 
