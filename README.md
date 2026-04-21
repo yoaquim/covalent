@@ -16,6 +16,7 @@
 - Light / dark mode
 - Multi-window support (`Cmd+N` / `Ctrl+N`)
 - Drag-and-drop file opening
+- Print / export to PDF (`Cmd+P` / `Ctrl+P`)
 - File association — set as default viewer for `.md` files
 - Native app built with Tauri (~5MB)
 
