@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app-icon.png" width="128" height="128" alt="Covalent icon">
+  <img src="app-icon.png?v=2" width="128" height="128" alt="Covalent icon">
 </p>
 
 <h1 align="center">Covalent</h1>
