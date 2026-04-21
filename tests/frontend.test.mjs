@@ -237,13 +237,12 @@ test('Cmd/Ctrl+P shortcut is registered', () => {
 test('print button is hidden by default (no content)', () => {
   assert(html.includes("display: none"));
   // Verify button gets shown when content renders
-  assert(html.includes("printBtn.style.display = ''"));
+  assert(html.includes("printBtn.style.display = 'block'"));
 });
 
 test('print button only shows after markdown is rendered', () => {
-  // The button display is set in renderMarkdown, not at load time
   const renderIdx = html.indexOf('async function renderMarkdown');
-  const showIdx = html.indexOf("printBtn.style.display = ''");
+  const showIdx = html.indexOf("printBtn.style.display = 'block'");
   assert(renderIdx < showIdx, 'printBtn shown inside renderMarkdown');
 });
 
