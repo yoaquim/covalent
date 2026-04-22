@@ -246,6 +246,65 @@ test('print button only shows after markdown is rendered', () => {
   assert(renderIdx < showIdx, 'printBtn shown inside renderMarkdown');
 });
 
+// --- Find bar ---
+
+console.log('\nFind bar:');
+
+test('find bar exists in HTML', () => {
+  assert(html.includes('id="find-bar"'));
+  assert(html.includes('id="find-input"'));
+  assert(html.includes('id="find-close"'));
+});
+
+test('Cmd/Ctrl+F shortcut is registered', () => {
+  assert(html.includes("e.key === 'f'"));
+  assert(html.includes('openFind()'));
+});
+
+test('/ key opens find bar', () => {
+  assert(html.includes("case '/':"));
+});
+
+test('find highlights matches as you type', () => {
+  assert(html.includes("findInput.addEventListener('input'"));
+  assert(html.includes('highlightMatches'));
+  assert(html.includes('find-highlight'));
+});
+
+test('find bar hidden in print', () => {
+  const printMedia = html.slice(html.indexOf('@media print'));
+  assert(printMedia.includes('.find-bar'));
+});
+
+// --- Vim-like keys ---
+
+console.log('\nVim-like keys:');
+
+test('j/k scroll keys registered', () => {
+  assert(html.includes("case 'j':"));
+  assert(html.includes("case 'k':"));
+});
+
+test('d/e half-page scroll registered', () => {
+  assert(html.includes("case 'd':"));
+  assert(html.includes("case 'e':"));
+  assert(html.includes('halfPage'));
+});
+
+test('G/g scroll to top/bottom registered', () => {
+  assert(html.includes("case 'G':"));
+  assert(html.includes("case 'g':"));
+});
+
+test('t toggles theme', () => {
+  assert(html.includes("e.key === 't'"));
+  assert(html.includes('themeBtn.click()'));
+});
+
+test('vim keys disabled when find bar is open', () => {
+  assert(html.includes('!findOpen()'));
+});
+
 // --- Summary ---
 
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed\n`);

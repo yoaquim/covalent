@@ -203,6 +203,63 @@
       background: #2c974b;
     }
 
+    /* Help modal */
+    .help-modal {
+      max-width: 520px;
+      width: 520px;
+      text-align: left;
+    }
+
+    .help-modal h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
+    .help-section {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      opacity: 0.4;
+      margin: 12px 0 6px;
+    }
+
+    .help-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 13px;
+    }
+
+    .help-key {
+      display: inline-block;
+      background: rgba(0,0,0,0.06);
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: monospace;
+      font-size: 12px;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    body.dark .help-key {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.12);
+    }
+
+    .help-icon {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      vertical-align: -2px;
+      margin-right: 6px;
+      opacity: 0.5;
+    }
+
     /* Drag overlay */
     .drag-overlay {
       display: none;
@@ -247,6 +304,88 @@
       margin: 16px 0;
     }
 
+    /* Find bar */
+    .find-bar {
+      display: none;
+      position: fixed;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      background: rgba(246, 248, 250, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid #d1d9e0;
+      border-radius: 10px;
+      padding: 6px 10px;
+      gap: 8px;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+
+    .find-bar.active {
+      display: flex;
+    }
+
+    body.dark .find-bar {
+      background: rgba(22, 27, 34, 0.95);
+      border-color: #30363d;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    .find-bar input {
+      background: #fff;
+      border: 1px solid #d1d9e0;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 14px;
+      color: inherit;
+      outline: none;
+      width: 280px;
+    }
+
+    .find-bar input:focus {
+      border-color: #2da44e;
+    }
+
+    body.dark .find-bar input {
+      background: #0d1117;
+      border-color: #30363d;
+    }
+
+    .find-bar-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: inherit;
+      opacity: 0.5;
+      padding: 2px;
+      line-height: 0;
+    }
+
+    .find-bar-close:hover {
+      opacity: 1;
+    }
+
+    mark.find-highlight {
+      background: #fff3a8;
+      color: inherit;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+
+    mark.find-highlight.current {
+      background: #f9a825;
+    }
+
+    body.dark mark.find-highlight {
+      background: #6b5900;
+    }
+
+    body.dark mark.find-highlight.current {
+      background: #f9a825;
+      color: #000;
+    }
+
     /* Print button */
     #print-btn {
       position: fixed;
@@ -283,7 +422,7 @@
 
     /* Print styles */
     @media print {
-      .drag-bar, #theme-btn, #print-btn, .drop-zone,
+      .drag-bar, #theme-btn, #print-btn, .find-bar, .drop-zone,
       .drag-overlay, .modal-overlay, #file-input { display: none !important; }
 
       body, body.dark {
@@ -321,6 +460,16 @@
     </svg>
   </button>
 
+  <div class="find-bar" id="find-bar">
+    <input type="text" id="find-input" placeholder="Find..." autocomplete="off" spellcheck="false">
+    <span id="find-count" style="font-size:12px;opacity:0.5;white-space:nowrap;min-width:36px;text-align:right;"></span>
+    <button class="find-bar-close" id="find-close" title="Close (Esc)">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="3" y1="3" x2="11" y2="11"/><line x1="11" y1="3" x2="3" y2="11"/>
+      </svg>
+    </button>
+  </div>
+
   <div id="drop-zone" class="drop-zone">
     <div class="drop-zone-icon">&#128196;</div>
     <div class="drop-zone-text">Drop a Markdown file here</div>
@@ -356,6 +505,29 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="help-modal">
+    <div class="modal help-modal">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="help-section">General</div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 14V4a2 2 0 0 1 2-2h4l4 4v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 2v4h4"/></svg>Open file</span><span class="help-key">⌘/Ctrl O</span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M6 2v12"/></svg>New window</span><span class="help-key">⌘/Ctrl N</span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="6" rx="1"/><path d="M4 12v2h8v-2"/></svg>Print / Save PDF</span><span class="help-key">⌘/Ctrl P</span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/></svg>Find</span><span class="help-key">⌘/Ctrl F</span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12"/></svg>Toggle theme</span><span class="help-key">t</span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="4" width="12" height="9" rx="2"/><path d="M5 10h1"/><path d="M8 10h1"/><path d="M11 10h1"/><path d="M4 7h8"/></svg>Show shortcuts</span><span class="help-key">?</span></div>
+      <div class="help-section">Navigation</div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M4 9l4 4 4-4"/></svg>Scroll down / up</span><span><span class="help-key">j</span> <span class="help-key">k</span></span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l4 4-4 4M8 4l4 4-4 4"/></svg>Half page down / up</span><span><span class="help-key">d</span> <span class="help-key">e</span></span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>Scroll left / right</span><span><span class="help-key">h</span> <span class="help-key">l</span></span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 3h8M8 3v10M5 10l3 3 3-3"/></svg>Go to top / bottom</span><span><span class="help-key">g</span> <span class="help-key">G</span></span></div>
+      <div class="help-section">Find</div>
+      <div class="help-row"><span>Open find</span><span class="help-key">/</span></div>
+      <div class="help-row"><span>Next match</span><span class="help-key">Enter</span></div>
+      <div class="help-row"><span>Previous match</span><span class="help-key">⇧ Enter</span></div>
+      <div class="help-row"><span>Close find</span><span class="help-key">Esc</span></div>
+    </div>
+  </div>
+
   <input type="file" id="file-input" accept=".md,.markdown,.mdx,.txt">
 
   <script>
@@ -367,6 +539,10 @@
     const dropZoneOpen = document.getElementById('drop-zone-open');
 
     const printBtn = document.getElementById('print-btn');
+    const findBar = document.getElementById('find-bar');
+    const findInput = document.getElementById('find-input');
+    const findClose = document.getElementById('find-close');
+    const findCount = document.getElementById('find-count');
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     let isDark = false;
     let lastMd = '';
@@ -541,7 +717,113 @@
     }
     printBtn.addEventListener('click', doPrint);
 
+    // --- Find ---
+    let findMarks = [];
+    let findCurrentIdx = -1;
+
+    function clearHighlights() {
+      findMarks.forEach(mark => {
+        const parent = mark.parentNode;
+        parent.replaceChild(document.createTextNode(mark.textContent), mark);
+        parent.normalize();
+      });
+      findMarks = [];
+      findCurrentIdx = -1;
+    }
+
+    function highlightMatches(query) {
+      clearHighlights();
+      if (!query) return;
+
+      const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+      const matches = [];
+      const lowerQuery = query.toLowerCase();
+
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        let text = node.textContent;
+        let idx = text.toLowerCase().indexOf(lowerQuery);
+        while (idx !== -1) {
+          matches.push({ node, idx });
+          idx = text.toLowerCase().indexOf(lowerQuery, idx + 1);
+        }
+      }
+
+      // Process in reverse so indices stay valid
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const { node, idx } = matches[i];
+        const range = document.createRange();
+        range.setStart(node, idx);
+        range.setEnd(node, idx + query.length);
+        const mark = document.createElement('mark');
+        mark.className = 'find-highlight';
+        range.surroundContents(mark);
+        findMarks.unshift(mark);
+      }
+
+      if (findMarks.length > 0) {
+        findCurrentIdx = 0;
+        findMarks[0].classList.add('current');
+        findMarks[0].scrollIntoView({ block: 'center' });
+      }
+      updateFindCount();
+    }
+
+    function updateFindCount() {
+      if (findMarks.length === 0) {
+        findCount.textContent = findInput.value ? '0/0' : '';
+      } else {
+        findCount.textContent = `${findCurrentIdx + 1}/${findMarks.length}`;
+      }
+    }
+
+    function navigateFind(direction) {
+      if (findMarks.length === 0) return;
+      findMarks[findCurrentIdx].classList.remove('current');
+      findCurrentIdx = (findCurrentIdx + direction + findMarks.length) % findMarks.length;
+      findMarks[findCurrentIdx].classList.add('current');
+      findMarks[findCurrentIdx].scrollIntoView({ block: 'center' });
+      updateFindCount();
+    }
+
+    function openFind() {
+      findBar.classList.add('active');
+      findInput.focus();
+      findInput.select();
+    }
+
+    function closeFind() {
+      findBar.classList.remove('active');
+      findInput.value = '';
+      findCount.textContent = '';
+      clearHighlights();
+    }
+
+    findInput.addEventListener('input', () => {
+      highlightMatches(findInput.value);
+    });
+
+    findInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        navigateFind(e.shiftKey ? -1 : 1);
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeFind();
+      }
+    });
+
+    findClose.addEventListener('click', closeFind);
+
+    // --- Help modal ---
+    document.getElementById('help-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'help-modal') e.target.classList.remove('active');
+    });
+
     // --- Keyboard shortcuts ---
+    const findOpen = () => findBar.classList.contains('active');
+
     document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
         e.preventDefault();
@@ -556,6 +838,43 @@
       if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
         e.preventDefault();
         if (lastMd) doPrint();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        if (lastMd) openFind();
+      }
+
+      // Help modal
+      const helpModal = document.getElementById('help-modal');
+      if (e.key === 'Escape' && helpModal.classList.contains('active')) {
+        helpModal.classList.remove('active');
+        return;
+      }
+
+      // Keys that work without a file open
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !findOpen()) {
+        if (e.key === '?') { helpModal.classList.toggle('active'); return; }
+        if (e.key === 't') { themeBtn.click(); return; }
+      }
+
+      // Vim-like keys (no modifier, file open, not in find bar)
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && lastMd && !findOpen()) {
+        const step = 60;
+        const halfPage = window.innerHeight / 2;
+        switch (e.key) {
+          case 'j': window.scrollBy(0, step); break;
+          case 'k': window.scrollBy(0, -step); break;
+          case 'h': window.scrollBy(-step, 0); break;
+          case 'l': window.scrollBy(step, 0); break;
+          case 'd': window.scrollBy(0, halfPage); break;
+          case 'e': window.scrollBy(0, -halfPage); break;
+          case 'G': window.scrollTo(0, document.body.scrollHeight); break;
+          case 'g': window.scrollTo(0, 0); break;
+          case '/':
+            e.preventDefault();
+            openFind();
+            break;
+        }
       }
     });
 
