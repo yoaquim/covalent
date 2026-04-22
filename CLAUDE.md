@@ -55,10 +55,18 @@ macOS-specific code (core-foundation FFI, title bar overlay, `set_default_md_vie
 
 ## Release
 
-Push a `v*` tag to trigger release CI. The workflow:
-1. Builds macOS (.dmg) and Windows (.exe) in parallel
-2. Uploads artifacts to GitHub Release
-3. Auto-updates the Homebrew tap (`yoaquim/homebrew-tap`) with new version + sha256
+Every push to `main` triggers the full CI pipeline:
+1. Audit + tests run in parallel
+2. If both pass, builds macOS (.dmg) and Windows (.exe) in parallel
+3. Auto-tags from version in `tauri.conf.json`
+4. Uploads artifacts to GitHub Release
+5. Auto-updates the Homebrew tap (`yoaquim/homebrew-tap`) with new version + sha256
+
+Concurrency control cancels stale runs when new pushes arrive.
+
+**ALWAYS include release notes.** Every version bump commit must have a clear, human-readable summary of what changed in the commit message. The CI uses `generate_release_notes: true` which pulls from commit messages — so good commit messages = good release notes. Format: lead with what the user gets, not implementation details.
+
+**Version bumps:** Update all three files together: `tauri.conf.json`, `package.json`, `Cargo.toml`.
 
 ## Conventions
 

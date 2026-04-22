@@ -18,6 +18,7 @@
 - Drag-and-drop file opening
 - Print / export to PDF (`Cmd+P` / `Ctrl+P`)
 - Find in document (`Cmd+F` / `Ctrl+F` or `/`) with live highlighting
+- Zoom in/out (`Cmd/Ctrl +`/`-`/`0`)
 - Vim-style navigation (`j`/`k`, `d`/`e`, `g`/`G`, `h`/`l`)
 - Keyboard shortcuts help (`?`)
 - File association — set as default viewer for `.md` files

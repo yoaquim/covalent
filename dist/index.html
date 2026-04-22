@@ -514,6 +514,7 @@
       <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6V2h8v4"/><rect x="2" y="6" width="12" height="6" rx="1"/><path d="M4 12v2h8v-2"/></svg>Print / Save PDF</span><span class="help-key">⌘/Ctrl P</span></div>
       <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/></svg>Find</span><span class="help-key">⌘/Ctrl F</span></div>
       <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 0 0 12"/></svg>Toggle theme</span><span class="help-key">t</span></div>
+      <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/><path d="M5 7h4"/><path d="M7 5v4"/></svg>Zoom in / out / reset</span><span><span class="help-key">⌘/Ctrl +</span> <span class="help-key">-</span> <span class="help-key">0</span></span></div>
       <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="4" width="12" height="9" rx="2"/><path d="M5 10h1"/><path d="M8 10h1"/><path d="M11 10h1"/><path d="M4 7h8"/></svg>Show shortcuts</span><span class="help-key">?</span></div>
       <div class="help-section">Navigation</div>
       <div class="help-row"><span><svg class="help-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 3v10M4 9l4 4 4-4"/></svg>Scroll down / up</span><span><span class="help-key">j</span> <span class="help-key">k</span></span></div>
@@ -821,6 +822,26 @@
       if (e.target.id === 'help-modal') e.target.classList.remove('active');
     });
 
+    // --- Zoom ---
+    let zoomLevel = parseInt(localStorage.getItem('zoom') || '100');
+
+    function applyZoom() {
+      document.body.style.zoom = zoomLevel + '%';
+      localStorage.setItem('zoom', zoomLevel);
+    }
+
+    function adjustZoom(delta) {
+      zoomLevel = Math.min(200, Math.max(50, zoomLevel + delta));
+      applyZoom();
+    }
+
+    function resetZoom() {
+      zoomLevel = 100;
+      applyZoom();
+    }
+
+    if (zoomLevel !== 100) applyZoom();
+
     // --- Keyboard shortcuts ---
     const findOpen = () => findBar.classList.contains('active');
 
@@ -842,6 +863,18 @@
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
         if (lastMd) openFind();
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        adjustZoom(10);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '-') {
+        e.preventDefault();
+        adjustZoom(-10);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
       }
 
       // Help modal

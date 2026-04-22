@@ -1,6 +1,6 @@
 {
   "productName": "Covalent",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "identifier": "com.yoaquim.mdviewer",
   "build": {
     "frontendDist": "../dist"
