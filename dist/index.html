@@ -634,12 +634,50 @@
 
     mermaid.initialize(mermaidLightConfig);
 
+    // --- Path helpers (used to resolve relative image/link paths) ---
+    function isExternalUrl(url) {
+      return /^(https?|data|blob|file|asset|tauri|mailto|about):/i.test(url) ||
+             url.startsWith('//') || url.startsWith('#');
+    }
+
+    function isAbsoluteFsPath(path) {
+      return path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path);
+    }
+
+    function dirname(filePath) {
+      const lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+      return lastSep >= 0 ? filePath.slice(0, lastSep) : '';
+    }
+
+    function joinPath(baseDir, rel) {
+      const sep = baseDir.includes('\\') ? '\\' : '/';
+      const segs = baseDir.split(/[\\/]/);
+      for (const seg of rel.split(/[\\/]/)) {
+        if (seg === '' || seg === '.') continue;
+        if (seg === '..') { if (segs.length > 1) segs.pop(); }
+        else segs.push(seg);
+      }
+      return segs.join(sep);
+    }
+
+    function rewriteRelativeAssets(baseDir) {
+      if (!baseDir || !window.__TAURI__) return;
+      const imgs = content.querySelectorAll('img[src]');
+      for (const img of imgs) {
+        const src = img.getAttribute('src');
+        if (!src || isExternalUrl(src)) continue;
+        const abs = isAbsoluteFsPath(src) ? src : joinPath(baseDir, src);
+        img.src = window.__TAURI__.core.convertFileSrc(abs);
+      }
+    }
+
     // --- Rendering ---
     async function renderMarkdown(md, fileName) {
       lastMd = md;
       lastName = fileName;
 
       content.innerHTML = marked.parse(md);
+      if (currentFilePath) rewriteRelativeAssets(dirname(currentFilePath));
       content.style.display = '';
       dropZone.style.display = 'none';
       printBtn.style.display = 'block';

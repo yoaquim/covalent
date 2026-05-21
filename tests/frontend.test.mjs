@@ -194,6 +194,79 @@ test('Mixed path split', () => {
   assert(name === 'file.md');
 });
 
+// --- Relative asset path resolution (image references in markdown) ---
+
+console.log('\nRelative asset path resolution:');
+
+function isExternalUrl(url) {
+  return /^(https?|data|blob|file|asset|tauri|mailto|about):/i.test(url) ||
+         url.startsWith('//') || url.startsWith('#');
+}
+
+function isAbsoluteFsPath(path) {
+  return path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path);
+}
+
+function dirname(filePath) {
+  const lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  return lastSep >= 0 ? filePath.slice(0, lastSep) : '';
+}
+
+function joinPath(baseDir, rel) {
+  const sep = baseDir.includes('\\') ? '\\' : '/';
+  const segs = baseDir.split(/[\\/]/);
+  for (const seg of rel.split(/[\\/]/)) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') { if (segs.length > 1) segs.pop(); }
+    else segs.push(seg);
+  }
+  return segs.join(sep);
+}
+
+test('external https URL detected', () => assert(isExternalUrl('https://example.com/x.png')));
+test('external http URL detected', () => assert(isExternalUrl('http://example.com/x.png')));
+test('data URL detected', () => assert(isExternalUrl('data:image/png;base64,abc')));
+test('asset protocol detected', () => assert(isExternalUrl('asset://localhost/x.png')));
+test('fragment-only detected as external', () => assert(isExternalUrl('#section')));
+test('protocol-relative detected', () => assert(isExternalUrl('//cdn.example.com/x.png')));
+test('relative path NOT external', () => assert(!isExternalUrl('images/x.png')));
+test('dot-relative NOT external', () => assert(!isExternalUrl('./images/x.png')));
+test('parent-relative NOT external', () => assert(!isExternalUrl('../shared/x.png')));
+
+test('unix absolute path detected', () => assert(isAbsoluteFsPath('/Users/x/img.png')));
+test('windows absolute path detected', () => assert(isAbsoluteFsPath('C:\\Users\\x\\img.png')));
+test('windows absolute with forward slash detected', () => assert(isAbsoluteFsPath('C:/Users/x/img.png')));
+test('relative path NOT absolute', () => assert(!isAbsoluteFsPath('images/x.png')));
+
+test('dirname of unix file path', () => {
+  assert(dirname('/Users/foo/bar/file.md') === '/Users/foo/bar');
+});
+test('dirname of windows file path', () => {
+  assert(dirname('C:\\Users\\foo\\file.md') === 'C:\\Users\\foo');
+});
+
+test('joinPath unix simple', () => {
+  assert(joinPath('/Users/foo/bar', 'images/x.png') === '/Users/foo/bar/images/x.png');
+});
+test('joinPath unix with ./', () => {
+  assert(joinPath('/Users/foo/bar', './images/x.png') === '/Users/foo/bar/images/x.png');
+});
+test('joinPath unix with ../', () => {
+  assert(joinPath('/Users/foo/bar', '../shared/x.png') === '/Users/foo/shared/x.png');
+});
+test('joinPath unix multiple ../', () => {
+  assert(joinPath('/Users/foo/bar', '../../etc/x.png') === '/Users/etc/x.png');
+});
+test('joinPath windows simple', () => {
+  assert(joinPath('C:\\Users\\foo', 'images\\x.png') === 'C:\\Users\\foo\\images\\x.png');
+});
+test('joinPath windows with forward slash in relative', () => {
+  assert(joinPath('C:\\Users\\foo', 'images/x.png') === 'C:\\Users\\foo\\images\\x.png');
+});
+test('joinPath nested directories', () => {
+  assert(joinPath('/a/b', 'c/d/e/f.png') === '/a/b/c/d/e/f.png');
+});
+
 // --- Print feature ---
 
 console.log('\nPrint feature:');
@@ -303,6 +376,29 @@ test('t toggles theme', () => {
 
 test('vim keys disabled when find bar is open', () => {
   assert(html.includes('!findOpen()'));
+});
+
+// --- Relative image rewriting wiring ---
+
+console.log('\nRelative image rewriting in HTML:');
+
+test('rewriteRelativeAssets function exists', () => {
+  assert(html.includes('function rewriteRelativeAssets'));
+});
+
+test('rewriteRelativeAssets called from renderMarkdown', () => {
+  assert(html.includes('rewriteRelativeAssets(dirname(currentFilePath))'));
+});
+
+test('convertFileSrc used to build asset URL', () => {
+  assert(html.includes('convertFileSrc'));
+});
+
+test('assetProtocol enabled in tauri.conf.json', () => {
+  const conf = readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf-8');
+  const parsed = JSON.parse(conf);
+  assert(parsed.app.security.assetProtocol.enable === true);
+  assert(Array.isArray(parsed.app.security.assetProtocol.scope));
 });
 
 // --- Summary ---
