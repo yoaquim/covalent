@@ -46,7 +46,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run JS tests
         run: node tests/frontend.test.mjs
@@ -92,7 +92,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build
         run: npx tauri build
