@@ -401,6 +401,61 @@ test('assetProtocol enabled in tauri.conf.json', () => {
   assert(Array.isArray(parsed.app.security.assetProtocol.scope));
 });
 
+// --- Vendored assets (no runtime CDN dependence) ---
+
+console.log('\nVendored assets:');
+
+import { existsSync } from 'fs';
+
+const scriptSrcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
+const linkHrefs = [...html.matchAll(/<link[^>]+href="([^"]+)"/g)].map(m => m[1]);
+const assetRefs = [...scriptSrcs, ...linkHrefs];
+
+test('index.html references at least one script and one stylesheet', () => {
+  assert(scriptSrcs.length > 0 && linkHrefs.length > 0);
+});
+
+test('no <script> or <link> loads from a remote host', () => {
+  const remote = assetRefs.filter(u => /^(https?:)?\/\//i.test(u));
+  assert(remote.length === 0, `Remote references found: ${remote.join(', ')}`);
+});
+
+test('no CDN hostnames anywhere in index.html', () => {
+  const cdn = html.match(/jsdelivr|unpkg\.com|cdnjs|googleapis|gstatic/gi);
+  assert(!cdn, `CDN hostnames found: ${cdn && cdn.join(', ')}`);
+});
+
+test('no integrity/crossorigin attributes left on local assets', () => {
+  assert(!/<(script|link)[^>]+(integrity|crossorigin)=/i.test(html));
+});
+
+test('every referenced script/stylesheet exists under dist/', () => {
+  const missing = assetRefs.filter(u => !existsSync(new URL(`../dist/${u}`, import.meta.url)));
+  assert(missing.length === 0, `Missing local files: ${missing.join(', ')}`);
+});
+
+test('vendored paths pin a version directory', () => {
+  const unpinned = assetRefs.filter(u => !/^vendor\/[^/]+\/\d+\.\d+\.\d+\//.test(u));
+  assert(unpinned.length === 0, `Unpinned vendor paths: ${unpinned.join(', ')}`);
+});
+
+test('KaTeX fonts referenced by katex.min.css are vendored', () => {
+  const cssRef = linkHrefs.find(u => /katex\.min\.css$/.test(u));
+  assert(cssRef, 'katex.min.css not referenced');
+  const cssDir = cssRef.replace(/[^/]+$/, '');
+  const css = readFileSync(new URL(`../dist/${cssRef}`, import.meta.url), 'utf-8');
+  const fonts = [...new Set([...css.matchAll(/url\(([^)]+)\)/g)].map(m => m[1]))];
+  assert(fonts.length > 0, 'no font urls found in katex.min.css');
+  const missing = fonts.filter(f => !existsSync(new URL(`../dist/${cssDir}${f}`, import.meta.url)));
+  assert(missing.length === 0, `Missing fonts: ${missing.join(', ')}`);
+});
+
+test('each vendored package directory ships a LICENSE', () => {
+  const dirs = [...new Set(assetRefs.map(u => u.match(/^vendor\/[^/]+\/[^/]+\//)?.[0]).filter(Boolean))];
+  const missing = dirs.filter(d => !existsSync(new URL(`../dist/${d}LICENSE`, import.meta.url)));
+  assert(missing.length === 0, `Missing LICENSE in: ${missing.join(', ')}`);
+});
+
 // --- Summary ---
 
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed\n`);
