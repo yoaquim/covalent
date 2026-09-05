@@ -561,6 +561,32 @@
     // --- Marked setup ---
     const renderer = new marked.Renderer();
 
+    // GitHub-style heading ids so #fragment links (in-page and cross-document) resolve.
+    // Decode every HTML entity (named, decimal, hex) the way a browser would.
+    function decodeEntities(str) {
+      const ta = document.createElement('textarea');
+      ta.innerHTML = str;
+      return ta.value;
+    }
+
+    function headingId(text, used) {
+      // Strip tags, then decode entities so "A &amp; B" and "A &copy; B" slug like GitHub
+      const plain = decodeEntities(text.replace(/<[^>]*>/g, ''));
+      // Same rules as GitHub: lowercase, drop punctuation except - and _, each space becomes a hyphen
+      const slug = plain.trim().toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-');
+      let id = slug;
+      for (let n = 1; used.has(id); n++) id = `${slug}-${n}`;
+      used.add(id);
+      return id;
+    }
+    let headingSlugs = new Set();
+
+    renderer.heading = function({ tokens, depth }) {
+      const text = this.parser.parseInline(tokens);
+      const id = headingId(text, headingSlugs);
+      return `<h${depth} id="${id}">${text}</h${depth}>\n`;
+    };
+
     renderer.code = function({ text, lang }) {
       if (lang === 'mermaid') {
         return `<pre class="mermaid">${text}</pre>`;
@@ -642,7 +668,12 @@
     }
 
     function isAbsoluteFsPath(path) {
-      return path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path);
+      // POSIX root, Windows drive (C:\ or C:/), or UNC share (\\server\share)
+      return path.startsWith('/') || path.startsWith('\\\\') || /^[a-zA-Z]:[\\/]/.test(path);
+    }
+
+    function safeDecode(s) {
+      try { return decodeURIComponent(s); } catch (_) { return s; } // literal '%', keep as-is
     }
 
     function dirname(filePath) {
@@ -653,22 +684,89 @@
     function joinPath(baseDir, rel) {
       const sep = baseDir.includes('\\') ? '\\' : '/';
       const segs = baseDir.split(/[\\/]/);
+      while (segs.length > 1 && segs[segs.length - 1] === '') segs.pop(); // "C:\\" or "/" bases
+      // A UNC root (\\server\share) is indivisible: ".." must never pop server or share.
+      const rootSegs = /^[\\/]{2}[^\\/]/.test(baseDir) ? 4 : 1;
       for (const seg of rel.split(/[\\/]/)) {
         if (seg === '' || seg === '.') continue;
-        if (seg === '..') { if (segs.length > 1) segs.pop(); }
+        if (seg === '..') { if (segs.length > rootSegs) segs.pop(); }
         else segs.push(seg);
       }
       return segs.join(sep);
+    }
+
+    // Resolve a decoded link/image path against the current document's directory.
+    // A single leading backslash is drive-rooted on Windows: keep the base's drive or UNC share.
+    function resolveAgainst(baseDir, rel) {
+      if (isAbsoluteFsPath(rel)) return rel;
+      if (!baseDir) return null;
+      if (rel.startsWith('\\')) {
+        const root = baseDir.match(/^([a-zA-Z]:|[\\/]{2}[^\\/]+[\\/][^\\/]+)/);
+        if (root) return joinPath(root[0] + '\\', rel);
+      }
+      return joinPath(baseDir, rel);
+    }
+
+    // --- Link handling ---
+    // Clicking a link must never navigate the viewer itself away from the document
+    // (issue #4). External URLs go to the default browser, relative Markdown links
+    // open in a new Covalent window, and other relative paths are revealed in the
+    // file manager (never executed/opened).
+    function linkAction(href, baseFile) {
+      if (href == null) return null;
+      if (href.startsWith('#')) return { type: 'anchor' };
+      if (href.startsWith('//')) return { type: 'external', url: 'https:' + href };
+      if (/^(https?|mailto|tel):/i.test(href)) return { type: 'external', url: href };
+      // Work on the decoded path part: marked percent-encodes backslashes and spaces.
+      const clean = safeDecode(href.split(/[?#]/)[0]);
+      const hashAt = href.indexOf('#');
+      const fragment = hashAt >= 0 ? safeDecode(href.slice(hashAt + 1)) || null : null;
+      if (!clean) return { type: 'ignore' }; // empty or query-only: would reload the viewer
+      // Windows drive paths (C:/x, C:\x) look like a URI scheme; recognise them first.
+      const isWinAbs = /^[a-zA-Z]:[\\/]/.test(clean);
+      if (!isWinAbs && /^[a-z][a-z0-9+.-]*:/i.test(clean)) return { type: 'ignore' }; // file:, data:, javascript:, ...
+      const abs = resolveAgainst(baseFile ? dirname(baseFile) : '', clean);
+      if (!abs) return { type: 'ignore' };
+      if (/\.(md|markdown|mdx)$/i.test(clean)) return { type: 'markdown', path: abs, fragment };
+      return { type: 'local', path: abs };
+    }
+
+    content.addEventListener('click', (e) => {
+      const a = e.target.closest('a[href]');
+      if (!a) return;
+      try {
+        const action = linkAction(a.getAttribute('href'), currentFilePath);
+        if (!action || action.type === 'anchor') return;
+        e.preventDefault();
+        const t = window.__TAURI__;
+        if (action.type === 'external') {
+          if (t) t.opener.openUrl(action.url);
+          else window.open(action.url, '_blank', 'noopener');
+        } else if (action.type === 'markdown' && t) {
+          t.core.invoke('open_new_window', { filePath: action.path, fragment: action.fragment });
+        } else if (action.type === 'local' && t) {
+          t.opener.revealItemInDir(action.path);
+        }
+      } catch (err) {
+        // Whatever went wrong, the viewer must not navigate away from the document.
+        e.preventDefault();
+        console.error('Link handling failed:', err);
+      }
+    });
+
+    // Resolve a rendered <img src> to a filesystem path, or null if it isn't a local file.
+    // marked percent-encodes backslashes and spaces, so decode before path checks.
+    function resolveAssetPath(src, baseDir) {
+      if (!src || isExternalUrl(src)) return null;
+      return resolveAgainst(baseDir, safeDecode(src));
     }
 
     function rewriteRelativeAssets(baseDir) {
       if (!baseDir || !window.__TAURI__) return;
       const imgs = content.querySelectorAll('img[src]');
       for (const img of imgs) {
-        const src = img.getAttribute('src');
-        if (!src || isExternalUrl(src)) continue;
-        const abs = isAbsoluteFsPath(src) ? src : joinPath(baseDir, src);
-        img.src = window.__TAURI__.core.convertFileSrc(abs);
+        const abs = resolveAssetPath(img.getAttribute('src'), baseDir);
+        if (abs) img.src = window.__TAURI__.core.convertFileSrc(abs);
       }
     }
 
@@ -677,6 +775,7 @@
       lastMd = md;
       lastName = fileName;
 
+      headingSlugs = new Set();
       content.innerHTML = marked.parse(md);
       if (currentFilePath) rewriteRelativeAssets(dirname(currentFilePath));
       content.style.display = '';
@@ -685,12 +784,16 @@
       document.title = fileName ? `${fileName} - Covalent` : 'Covalent';
 
       mermaid.initialize(isDark ? mermaidDarkConfig : mermaidLightConfig);
-      await mermaid.run({ querySelector: '.mermaid' });
+      // suppressErrors: a malformed diagram shows Mermaid's inline error instead of rejecting the render
+      await mermaid.run({ querySelector: '.mermaid', suppressErrors: true });
     }
 
     // --- File handling ---
     function handleFile(file) {
       if (!file) return;
+      // Picker/drop Files carry no filesystem path, so relative links and images
+      // can't be resolved; clear any path left over from a previously opened file.
+      currentFilePath = null;
       const reader = new FileReader();
       reader.onload = () => renderMarkdown(reader.result, file.name);
       reader.readAsText(file);
@@ -982,26 +1085,56 @@
     // --- Tauri integration ---
     let currentFilePath = null;
 
-    async function openFileFromPath(filePath) {
-      try {
-        const md = await window.__TAURI__.core.invoke('read_file', { path: filePath });
-        const fileName = filePath.split(/[\\/]/).pop();
-        currentFilePath = filePath;
-        renderMarkdown(md, fileName);
+    function scrollToFragment(fragment) {
+      if (!fragment) return;
+      const el = document.getElementById(fragment) ||
+                 content.querySelector(`a[name="${fragment.replace(/"/g, '\\"')}"]`);
+      if (el) el.scrollIntoView();
+    }
 
-        // Start watching for changes
-        await window.__TAURI__.core.invoke('watch_file', { path: filePath });
+    async function openFileFromPath(filePath) {
+      let md;
+      try {
+        md = await window.__TAURI__.core.invoke('read_file', { path: filePath });
       } catch (err) {
         console.error('Failed to read file:', err);
+        return;
+      }
+      const fileName = filePath.split(/[\\/]/).pop();
+      currentFilePath = filePath;
+      try {
+        await renderMarkdown(md, fileName);
+      } catch (err) {
+        // Render problems must not prevent live reload; a fix on disk should still re-render.
+        console.error('Failed to render file:', err);
+      }
+      try {
+        await window.__TAURI__.core.invoke('watch_file', { path: filePath });
+      } catch (err) {
+        console.error('Failed to watch file:', err);
       }
     }
 
     async function initTauri() {
       if (!window.__TAURI__) return;
 
-      // Check if this window was created with a file path
+      // Hot reload: every window watches its own file, so every window must listen.
+      window.__TAURI__.event.listen('file-changed', async (event) => {
+        if (currentFilePath && event.payload === currentFilePath) {
+          try {
+            const md = await window.__TAURI__.core.invoke('read_file', { path: currentFilePath });
+            const fileName = currentFilePath.split(/[\\/]/).pop();
+            renderMarkdown(md, fileName);
+          } catch (err) {
+            console.error('Failed to reload file:', err);
+          }
+        }
+      });
+
+      // Check if this window was created with a file path (and optional #fragment)
       if (window.__INITIAL_FILE__) {
-        openFileFromPath(window.__INITIAL_FILE__);
+        await openFileFromPath(window.__INITIAL_FILE__);
+        scrollToFragment(window.__INITIAL_FRAGMENT__);
         return;
       }
 
@@ -1015,25 +1148,12 @@
         console.error('Failed to get opened files:', err);
       }
 
-      // Listen for files opened while app is already running
+      // Listen for files opened while app is already running (main window only)
       window.__TAURI__.event.listen('file-opened', (event) => {
         if (lastMd) {
           window.__TAURI__.core.invoke('open_new_window', { filePath: event.payload });
         } else {
           openFileFromPath(event.payload);
-        }
-      });
-
-      // Hot reload: re-render when file changes on disk
-      window.__TAURI__.event.listen('file-changed', async (event) => {
-        if (currentFilePath && event.payload === currentFilePath) {
-          try {
-            const md = await window.__TAURI__.core.invoke('read_file', { path: currentFilePath });
-            const fileName = currentFilePath.split('/').pop();
-            renderMarkdown(md, fileName);
-          } catch (err) {
-            console.error('Failed to reload file:', err);
-          }
         }
       });
     }
