@@ -646,6 +646,10 @@
       return path.startsWith('/') || path.startsWith('\\\\') || /^[a-zA-Z]:[\\/]/.test(path);
     }
 
+    function safeDecode(s) {
+      try { return decodeURIComponent(s); } catch (_) { return s; } // literal '%', keep as-is
+    }
+
     function dirname(filePath) {
       const lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
       return lastSep >= 0 ? filePath.slice(0, lastSep) : '';
@@ -673,8 +677,7 @@
       if (href.startsWith('//')) return { type: 'external', url: 'https:' + href };
       if (/^(https?|mailto|tel):/i.test(href)) return { type: 'external', url: href };
       // Work on the decoded path part: marked percent-encodes backslashes and spaces.
-      let clean = href.split(/[?#]/)[0];
-      try { clean = decodeURIComponent(clean); } catch (_) { /* literal %, keep as-is */ }
+      const clean = safeDecode(href.split(/[?#]/)[0]);
       if (!clean) return { type: 'ignore' }; // empty or query-only: would reload the viewer
       // Windows drive paths (C:/x, C:\x) look like a URI scheme; recognise them first.
       const isWinAbs = /^[a-zA-Z]:[\\/]/.test(clean);
@@ -708,14 +711,20 @@
       }
     });
 
+    // Resolve a rendered <img src> to a filesystem path, or null if it isn't a local file.
+    // marked percent-encodes backslashes and spaces, so decode before path checks.
+    function resolveAssetPath(src, baseDir) {
+      if (!src || isExternalUrl(src)) return null;
+      const decoded = safeDecode(src);
+      return isAbsoluteFsPath(decoded) ? decoded : joinPath(baseDir, decoded);
+    }
+
     function rewriteRelativeAssets(baseDir) {
       if (!baseDir || !window.__TAURI__) return;
       const imgs = content.querySelectorAll('img[src]');
       for (const img of imgs) {
-        const src = img.getAttribute('src');
-        if (!src || isExternalUrl(src)) continue;
-        const abs = isAbsoluteFsPath(src) ? src : joinPath(baseDir, src);
-        img.src = window.__TAURI__.core.convertFileSrc(abs);
+        const abs = resolveAssetPath(img.getAttribute('src'), baseDir);
+        if (abs) img.src = window.__TAURI__.core.convertFileSrc(abs);
       }
     }
 

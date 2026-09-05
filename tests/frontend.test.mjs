@@ -198,21 +198,19 @@ test('Mixed path split', () => {
 
 console.log('\nRelative asset path resolution:');
 
-function isExternalUrl(url) {
-  return /^(https?|data|blob|file|asset|tauri|mailto|about):/i.test(url) ||
-         url.startsWith('//') || url.startsWith('#');
-}
 
 // Path helpers are taken from the real source in index.html so tests can't drift from the app.
 const appSrc = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf-8');
-function extractFn(name) {
+function extractFn(name, deps = {}) {
   const m = appSrc.match(new RegExp(`    function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n    \\}\\n`));
   if (!m) throw new Error(`${name} not found in index.html`);
-  return new Function(m[0] + `\nreturn ${name};`)();
+  return new Function(...Object.keys(deps), m[0] + `\nreturn ${name};`)(...Object.values(deps));
 }
+const isExternalUrl = extractFn('isExternalUrl');
 const isAbsoluteFsPath = extractFn('isAbsoluteFsPath');
 const dirname = extractFn('dirname');
 const joinPath = extractFn('joinPath');
+const safeDecode = extractFn('safeDecode');
 
 test('external https URL detected', () => assert(isExternalUrl('https://example.com/x.png')));
 test('external http URL detected', () => assert(isExternalUrl('http://example.com/x.png')));
@@ -487,7 +485,7 @@ test('opener:default permission granted to all windows', () => {
 // linkAction is exercised from the real source in index.html (extracted, not copied)
 const linkActionSrc = html.match(/    function linkAction\(href, baseFile\) \{[\s\S]*?\n    \}\n/);
 const linkAction = linkActionSrc
-  ? new Function('isAbsoluteFsPath', 'dirname', 'joinPath', linkActionSrc[0] + '\nreturn linkAction;')(isAbsoluteFsPath, dirname, joinPath)
+  ? new Function('isAbsoluteFsPath', 'dirname', 'joinPath', 'safeDecode', linkActionSrc[0] + '\nreturn linkAction;')(isAbsoluteFsPath, dirname, joinPath, safeDecode)
   : null;
 
 test('linkAction is defined in index.html', () => assert(typeof linkAction === 'function'));
@@ -606,6 +604,39 @@ test('UNC share links are absolute, not joined onto the document folder (Codex P
   const r = linkAction(href, String.raw`C:\docs\a.md`);
   assert(r.type === 'markdown' && r.path === String.raw`\\server\share\next.md`, JSON.stringify(r));
   assert(isAbsoluteFsPath(String.raw`\\server\share\img.png`), 'images on shares are absolute too');
+});
+
+// Image sources as marked emits them (percent-encoded), resolved by the real helper
+const resolveAssetPath = extractFn('resolveAssetPath', { isExternalUrl, safeDecode, isAbsoluteFsPath, joinPath });
+const renderedSrc = (md) => realMarked.parse(md).match(/src="([^"]*)"/)?.[1] ?? null;
+
+test('resolveAssetPath is used by rewriteRelativeAssets', () => {
+  const fn = html.match(/function rewriteRelativeAssets\(baseDir\) \{[\s\S]*?\n    \}\n/);
+  assert(fn && fn[0].includes('resolveAssetPath('));
+});
+
+test('UNC image source is decoded and kept absolute (Codex P2)', () => {
+  const src = renderedSrc(String.raw`![x](\\\\server\\share\\img.png)`);
+  assert(src === '%5C%5Cserver%5Cshare%5Cimg.png', 'renderer output changed: ' + src);
+  assert(resolveAssetPath(src, String.raw`C:\docs`) === String.raw`\\server\share\img.png`);
+});
+
+test('image filename with spaces is decoded before joining', () => {
+  const src = renderedSrc('![x](<my pic.png>)');
+  assert(src === 'my%20pic.png', 'renderer output changed: ' + src);
+  assert(resolveAssetPath(src, '/d/docs') === '/d/docs/my pic.png');
+});
+
+test('literal percent in image filename does not throw', () => {
+  assert(resolveAssetPath('100%.png', '/d') === '/d/100%.png');
+});
+
+test('external and absolute image sources are untouched or kept absolute', () => {
+  assert(resolveAssetPath('https://x.y/a.png', '/d') === null);
+  assert(resolveAssetPath('data:image/png;base64,AA', '/d') === null);
+  assert(resolveAssetPath('/abs/a.png', '/d') === '/abs/a.png');
+  assert(resolveAssetPath('C:/pics/a.png', 'D:\\docs') === 'C:/pics/a.png');
+  assert(resolveAssetPath('../up.png', '/d/docs') === '/d/up.png');
 });
 
 // --- Summary ---
