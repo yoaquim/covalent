@@ -731,6 +731,17 @@ test('a document with no directory yields inert relative links (Codex P2)', () =
   assert(resolveAssetPath('pic.png', '') === null);
 });
 
+test('a broken Mermaid diagram never rejects rendering or skips the file watcher (Codex P2)', () => {
+  assert(html.includes("mermaid.run({ querySelector: '.mermaid', suppressErrors: true })"));
+  const fn = html.match(/async function openFileFromPath\(filePath\) \{[\s\S]*?\n    \}\n/);
+  assert(fn, 'openFileFromPath not found');
+  const body = fn[0];
+  const render = body.indexOf('await renderMarkdown(');
+  const renderCatch = body.indexOf('catch', render);
+  const watch = body.indexOf("invoke('watch_file'");
+  assert(render >= 0 && renderCatch >= 0 && watch > renderCatch, 'watch_file must run after the render try/catch, not inside it');
+});
+
 // --- Summary ---
 
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed\n`);

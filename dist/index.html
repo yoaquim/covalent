@@ -768,7 +768,8 @@
       document.title = fileName ? `${fileName} - Covalent` : 'Covalent';
 
       mermaid.initialize(isDark ? mermaidDarkConfig : mermaidLightConfig);
-      await mermaid.run({ querySelector: '.mermaid' });
+      // suppressErrors: a malformed diagram shows Mermaid's inline error instead of rejecting the render
+      await mermaid.run({ querySelector: '.mermaid', suppressErrors: true });
     }
 
     // --- File handling ---
@@ -1076,16 +1077,25 @@
     }
 
     async function openFileFromPath(filePath) {
+      let md;
       try {
-        const md = await window.__TAURI__.core.invoke('read_file', { path: filePath });
-        const fileName = filePath.split(/[\\/]/).pop();
-        currentFilePath = filePath;
-        await renderMarkdown(md, fileName);
-
-        // Start watching for changes
-        await window.__TAURI__.core.invoke('watch_file', { path: filePath });
+        md = await window.__TAURI__.core.invoke('read_file', { path: filePath });
       } catch (err) {
         console.error('Failed to read file:', err);
+        return;
+      }
+      const fileName = filePath.split(/[\\/]/).pop();
+      currentFilePath = filePath;
+      try {
+        await renderMarkdown(md, fileName);
+      } catch (err) {
+        // Render problems must not prevent live reload; a fix on disk should still re-render.
+        console.error('Failed to render file:', err);
+      }
+      try {
+        await window.__TAURI__.core.invoke('watch_file', { path: filePath });
+      } catch (err) {
+        console.error('Failed to watch file:', err);
       }
     }
 
