@@ -194,6 +194,7 @@ mod tests {
 
 fn main() {
     let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .manage(OpenedFiles(Mutex::new(Vec::new())))
         .manage(FrontendReady(AtomicU32::new(0)))
         .manage(FileWatcher(Mutex::new(None)));

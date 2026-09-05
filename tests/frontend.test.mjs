@@ -456,6 +456,43 @@ test('each vendored package directory ships a LICENSE', () => {
   assert(missing.length === 0, `Missing LICENSE in: ${missing.join(', ')}`);
 });
 
+// --- Link handling (issue #4: links must not navigate the viewer away) ---
+
+console.log('\nLink handling:');
+
+test('content click handler intercepts anchor clicks', () => {
+  assert(html.includes("content.addEventListener('click'"));
+  assert(html.includes("closest('a[href]')"));
+  assert(html.includes('e.preventDefault()'));
+});
+
+test('external links open in the default browser via the opener plugin', () => {
+  assert(html.includes('opener.openUrl('));
+  assert(html.includes("window.open(") && html.includes("'noopener'"), 'browser fallback for non-Tauri context');
+});
+
+test('relative Markdown links open in a new Covalent window', () => {
+  assert(/invoke\('open_new_window',\s*\{\s*filePath:\s*action\.path/.test(html));
+});
+
+test('other relative links are revealed in the file manager, never opened', () => {
+  assert(html.includes('opener.revealItemInDir('));
+  assert(!html.includes('opener.openPath('));
+});
+
+test('opener plugin is registered in Rust and Cargo.toml', () => {
+  const rs = readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf-8');
+  const toml = readFileSync(new URL('../src-tauri/Cargo.toml', import.meta.url), 'utf-8');
+  assert(rs.includes('.plugin(tauri_plugin_opener::init())'));
+  assert(/^tauri-plugin-opener\s*=/m.test(toml));
+});
+
+test('opener:default permission granted to all windows', () => {
+  const cap = JSON.parse(readFileSync(new URL('../src-tauri/capabilities/default.json', import.meta.url), 'utf-8'));
+  assert(cap.permissions.includes('opener:default'));
+  assert(cap.windows.includes('main') && cap.windows.includes('window-*'));
+});
+
 // --- Summary ---
 
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed\n`);

@@ -8,6 +8,7 @@
     "core:event:allow-emit",
     "core:window:allow-start-dragging",
     "core:window:allow-create",
-    "core:webview:allow-print"
+    "core:webview:allow-print",
+    "opener:default"
   ]
 }

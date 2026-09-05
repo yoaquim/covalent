@@ -661,6 +661,42 @@
       return segs.join(sep);
     }
 
+    // --- Link handling ---
+    // Clicking a link must never navigate the viewer itself away from the document
+    // (issue #4). External URLs go to the default browser, relative Markdown links
+    // open in a new Covalent window, and other relative paths are revealed in the
+    // file manager (never executed/opened).
+    function linkAction(href, baseFile) {
+      if (!href) return null;
+      if (href.startsWith('#')) return { type: 'anchor' };
+      if (href.startsWith('//')) return { type: 'external', url: 'https:' + href };
+      if (/^(https?|mailto|tel):/i.test(href)) return { type: 'external', url: href };
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return { type: 'ignore' }; // file:, data:, javascript:, ...
+      const clean = decodeURIComponent(href.split(/[?#]/)[0]);
+      if (!clean) return { type: 'anchor' };
+      const abs = isAbsoluteFsPath(clean) ? clean : (baseFile ? joinPath(dirname(baseFile), clean) : null);
+      if (!abs) return { type: 'ignore' };
+      if (/\.(md|markdown|mdx)$/i.test(clean)) return { type: 'markdown', path: abs };
+      return { type: 'local', path: abs };
+    }
+
+    content.addEventListener('click', (e) => {
+      const a = e.target.closest('a[href]');
+      if (!a) return;
+      const action = linkAction(a.getAttribute('href'), currentFilePath);
+      if (!action || action.type === 'anchor') return;
+      e.preventDefault();
+      const t = window.__TAURI__;
+      if (action.type === 'external') {
+        if (t) t.opener.openUrl(action.url);
+        else window.open(action.url, '_blank', 'noopener');
+      } else if (action.type === 'markdown' && t) {
+        t.core.invoke('open_new_window', { filePath: action.path });
+      } else if (action.type === 'local' && t) {
+        t.opener.revealItemInDir(action.path);
+      }
+    });
+
     function rewriteRelativeAssets(baseDir) {
       if (!baseDir || !window.__TAURI__) return;
       const imgs = content.querySelectorAll('img[src]');
