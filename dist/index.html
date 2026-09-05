@@ -706,7 +706,8 @@
       // Windows drive paths (C:/x, C:\x) look like a URI scheme; recognise them first.
       const isWinAbs = /^[a-zA-Z]:[\\/]/.test(clean);
       if (!isWinAbs && /^[a-z][a-z0-9+.-]*:/i.test(clean)) return { type: 'ignore' }; // file:, data:, javascript:, ...
-      const abs = isAbsoluteFsPath(clean) ? clean : (baseFile ? joinPath(dirname(baseFile), clean) : null);
+      const baseDir = baseFile ? dirname(baseFile) : '';
+      const abs = isAbsoluteFsPath(clean) ? clean : (baseDir ? joinPath(baseDir, clean) : null);
       if (!abs) return { type: 'ignore' };
       if (/\.(md|markdown|mdx)$/i.test(clean)) return { type: 'markdown', path: abs, fragment };
       return { type: 'local', path: abs };
@@ -740,7 +741,8 @@
     function resolveAssetPath(src, baseDir) {
       if (!src || isExternalUrl(src)) return null;
       const decoded = safeDecode(src);
-      return isAbsoluteFsPath(decoded) ? decoded : joinPath(baseDir, decoded);
+      if (isAbsoluteFsPath(decoded)) return decoded;
+      return baseDir ? joinPath(baseDir, decoded) : null;
     }
 
     function rewriteRelativeAssets(baseDir) {
@@ -1090,6 +1092,19 @@
     async function initTauri() {
       if (!window.__TAURI__) return;
 
+      // Hot reload: every window watches its own file, so every window must listen.
+      window.__TAURI__.event.listen('file-changed', async (event) => {
+        if (currentFilePath && event.payload === currentFilePath) {
+          try {
+            const md = await window.__TAURI__.core.invoke('read_file', { path: currentFilePath });
+            const fileName = currentFilePath.split(/[\\/]/).pop();
+            renderMarkdown(md, fileName);
+          } catch (err) {
+            console.error('Failed to reload file:', err);
+          }
+        }
+      });
+
       // Check if this window was created with a file path (and optional #fragment)
       if (window.__INITIAL_FILE__) {
         await openFileFromPath(window.__INITIAL_FILE__);
@@ -1107,25 +1122,12 @@
         console.error('Failed to get opened files:', err);
       }
 
-      // Listen for files opened while app is already running
+      // Listen for files opened while app is already running (main window only)
       window.__TAURI__.event.listen('file-opened', (event) => {
         if (lastMd) {
           window.__TAURI__.core.invoke('open_new_window', { filePath: event.payload });
         } else {
           openFileFromPath(event.payload);
-        }
-      });
-
-      // Hot reload: re-render when file changes on disk
-      window.__TAURI__.event.listen('file-changed', async (event) => {
-        if (currentFilePath && event.payload === currentFilePath) {
-          try {
-            const md = await window.__TAURI__.core.invoke('read_file', { path: currentFilePath });
-            const fileName = currentFilePath.split('/').pop();
-            renderMarkdown(md, fileName);
-          } catch (err) {
-            console.error('Failed to reload file:', err);
-          }
         }
       });
     }

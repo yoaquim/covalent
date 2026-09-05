@@ -31,9 +31,20 @@ struct FrontendReady(AtomicU32);
 struct FileWatcher(Mutex<HashMap<String, notify::RecommendedWatcher>>);
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 
-/// Escape a string for embedding inside a double-quoted JS string literal.
+/// Serialize a string as a JavaScript string literal (quotes included). JSON
+/// escaping covers quotes, backslashes and control characters such as newlines,
+/// so an arbitrary path or #fragment can never break the initialization script.
 fn js_string_literal(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string())
+}
+
+/// Make a CLI argument absolute so relative links resolve beside the document.
+fn absolutize(p: PathBuf) -> PathBuf {
+    if p.is_absolute() {
+        p
+    } else {
+        std::path::absolute(&p).unwrap_or(p)
+    }
 }
 
 fn create_window(app: &AppHandle, file_path: Option<&str>, fragment: Option<&str>) -> Result<(), String> {
@@ -51,10 +62,10 @@ fn create_window(app: &AppHandle, file_path: Option<&str>, fragment: Option<&str
     }
 
     if let Some(path) = file_path {
-        let mut script = format!("window.__INITIAL_FILE__ = \"{}\";", js_string_literal(path));
+        let mut script = format!("window.__INITIAL_FILE__ = {};", js_string_literal(path));
         if let Some(frag) = fragment.filter(|f| !f.is_empty()) {
             script.push_str(&format!(
-                " window.__INITIAL_FRAGMENT__ = \"{}\";",
+                " window.__INITIAL_FRAGMENT__ = {};",
                 js_string_literal(frag)
             ));
         }
@@ -191,13 +202,32 @@ mod tests {
     #[test]
     fn path_escape_backslashes() {
         let path = r"C:\Users\test\file.md";
-        assert_eq!(js_string_literal(path), r"C:\\Users\\test\\file.md");
+        assert_eq!(js_string_literal(path), r#""C:\\Users\\test\\file.md""#);
     }
 
     #[test]
     fn path_escape_quotes() {
         let path = r#"/path/to/"quoted".md"#;
-        assert_eq!(js_string_literal(path), r#"/path/to/\"quoted\".md"#);
+        assert_eq!(js_string_literal(path), r#""/path/to/\"quoted\".md""#);
+    }
+
+    #[test]
+    fn fragment_with_newline_stays_a_valid_js_literal() {
+        // other.md#foo%0Abar decodes to "foo\nbar"; the literal must not contain a raw newline
+        let lit = js_string_literal("foo\nbar\t\"q\"");
+        assert!(!lit.contains('\n'), "raw newline would break the init script: {}", lit);
+        assert_eq!(lit, r#""foo\nbar\t\"q\"""#);
+        let script = format!("window.__INITIAL_FRAGMENT__ = {};", lit);
+        assert_eq!(script.lines().count(), 1);
+    }
+
+    #[test]
+    fn relative_cli_paths_become_absolute() {
+        let abs = absolutize(PathBuf::from("README.md"));
+        assert!(abs.is_absolute());
+        assert!(abs.ends_with("README.md"));
+        let already = PathBuf::from(if cfg!(windows) { r"C:\docs\a.md" } else { "/docs/a.md" });
+        assert_eq!(absolutize(already.clone()), already);
     }
 
     #[test]
@@ -265,6 +295,7 @@ fn main() {
                     .filter(|a| !a.starts_with('-'))
                     .map(PathBuf::from)
                     .filter(|p| p.exists())
+                    .map(absolutize)
                     .collect();
                 if !files.is_empty() {
                     let state = _app.state::<OpenedFiles>();

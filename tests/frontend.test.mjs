@@ -717,6 +717,20 @@ test('".." never escapes a UNC share root (Codex P2)', () => {
   assert(joinPath('/a/b', '../c.md') === '/a/c.md');
 });
 
+test('hot-reload listener is registered before the initial-file early return (Codex P2)', () => {
+  const init = html.slice(html.indexOf('async function initTauri()'));
+  const listen = init.indexOf("listen('file-changed'");
+  const early = init.indexOf('if (window.__INITIAL_FILE__)');
+  assert(listen >= 0 && early >= 0 && listen < early, 'file-changed must be listened for in every window');
+  const opened = init.indexOf("listen('file-opened'");
+  assert(opened > early, 'only the main window (no initial file) should react to file-opened');
+});
+
+test('a document with no directory yields inert relative links (Codex P2)', () => {
+  assert(linkAction('other.md', 'README.md').type === 'ignore');
+  assert(resolveAssetPath('pic.png', '') === null);
+});
+
 // --- Summary ---
 
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed\n`);
