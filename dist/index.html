@@ -563,7 +563,9 @@
 
     // GitHub-style heading ids so #fragment links (in-page and cross-document) resolve.
     function headingId(text, seen) {
-      const plain = text.replace(/<[^>]*>/g, '');
+      // Strip tags, then undo marked's HTML escaping so "A & B" slugs like GitHub ("a--b")
+      const entities = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+      const plain = text.replace(/<[^>]*>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => entities[e]);
       // Same rules as GitHub: lowercase, drop punctuation except - and _, each space becomes a hyphen
       let slug = plain.trim().toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-');
       const n = seen.get(slug) || 0;

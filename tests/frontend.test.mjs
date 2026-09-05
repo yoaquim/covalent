@@ -672,6 +672,8 @@ test('headings get GitHub-style ids', () => {
   assert(headingId('snake_case_name', seen) === 'snake_case_name');
   assert(headingId('API v2.0 / usage', seen) === 'api-v20--usage');
   assert(headingId('<code>fn</code> main', seen) === 'fn-main', 'tags stripped');
+  assert(headingId('A &amp; B', seen) === 'a--b', 'entities decoded before slugging (Codex P2)');
+  assert(headingId('x &lt;T&gt; &quot;q&quot; it&#39;s', seen) === 'x-t-q-its', JSON.stringify(headingId('x &lt;T&gt; &quot;q&quot; it&#39;s', new Map())));
 });
 
 test('duplicate headings get numbered ids', () => {
