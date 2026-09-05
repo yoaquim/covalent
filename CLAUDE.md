@@ -7,17 +7,18 @@ Lightweight native Markdown viewer built with Tauri 2 (Rust + HTML/JS). Viewer o
 - **Backend:** Rust / Tauri 2
 - **Frontend:** Single `dist/index.html` — vanilla JS, no build step
 - **Rendering:** marked.js (GFM), highlight.js (syntax), mermaid (diagrams), KaTeX (math)
-- **All JS/CSS loaded from CDN** — no bundler
+- **All third-party JS/CSS vendored** under `dist/vendor/<pkg>/<version>/` — no bundler, no runtime CDN requests (see `dist/vendor/MANIFEST.md`)
 
 ## Project Structure
 
 ```
 dist/index.html            # Entire frontend (HTML + CSS + JS)
+dist/vendor/                # Vendored marked, mermaid, KaTeX, highlight.js, github-markdown-css (+ MANIFEST.md)
 src-tauri/src/main.rs       # Entire backend
 src-tauri/tauri.conf.json   # Tauri config, file associations, window setup
 src-tauri/Cargo.toml        # Rust dependencies
 package.json                # Tauri CLI + test script
-tests/math-regex.test.mjs   # JS tests for math regex and path handling
+tests/frontend.test.mjs     # JS tests for math regex, path handling, print/find wiring, vendored assets
 .github/workflows/          # release.yml (macOS + Windows build), audit.yml
 ```
 
@@ -34,7 +35,7 @@ npm test                 # Run all tests (JS + Rust)
 
 Red-green-refactor. Tests must pass before committing.
 
-- **JS tests** (`tests/math-regex.test.mjs`): inline/block math regex matching, currency dollar sign rejection, Windows/Unix path splitting. Run with `node tests/math-regex.test.mjs`.
+- **JS tests** (`tests/frontend.test.mjs`): inline/block math regex matching, currency dollar sign rejection, Windows/Unix path splitting, print/find wiring, and a vendored-assets check (no remote `<script>`/`<link>`, every referenced file exists, LICENSE per package). Run with `node tests/frontend.test.mjs`.
 - **Rust tests** (`src-tauri/src/main.rs`): file reading, path escaping, window label incrementing. Run with `cd src-tauri && cargo test`.
 - **Combined**: `npm test` runs both.
 
@@ -72,4 +73,4 @@ Concurrency control cancels stale runs when new pushes arrive.
 
 - Keep it minimal — avoid unnecessary abstraction.
 - Frontend is a single HTML file with inline `<style>` and `<script>` — no components, no framework.
-- All rendering libraries loaded via CDN, not npm.
+- All rendering libraries are vendored from verified npm tarballs into `dist/vendor/` (never loaded from a CDN at runtime). To update one, follow `dist/vendor/MANIFEST.md`.
