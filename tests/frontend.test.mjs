@@ -493,6 +493,83 @@ test('opener:default permission granted to all windows', () => {
   assert(cap.windows.includes('main') && cap.windows.includes('window-*'));
 });
 
+// linkAction is exercised from the real source in index.html (extracted, not copied)
+const linkActionSrc = html.match(/    function linkAction\(href, baseFile\) \{[\s\S]*?\n    \}\n/);
+const linkAction = linkActionSrc
+  ? new Function('isAbsoluteFsPath', 'dirname', 'joinPath', linkActionSrc[0] + '\nreturn linkAction;')(isAbsoluteFsPath, dirname, joinPath)
+  : null;
+
+test('linkAction is defined in index.html', () => assert(typeof linkAction === 'function'));
+
+test('http/https/mailto/tel are external', () => {
+  for (const u of ['https://a.b/c', 'http://a.b', 'mailto:x@y.z', 'tel:+1555']) {
+    const r = linkAction(u, '/d/doc.md');
+    assert(r.type === 'external' && r.url === u, u);
+  }
+});
+
+test('protocol-relative link is external via https', () => {
+  const r = linkAction('//example.org/x', '/d/doc.md');
+  assert(r.type === 'external' && r.url === 'https://example.org/x');
+});
+
+test('in-page anchor is left to the browser', () => {
+  assert(linkAction('#section', '/d/doc.md').type === 'anchor');
+});
+
+test('javascript:, data: and file: links are inert', () => {
+  for (const u of ['javascript:alert(1)', 'data:text/html,hi', 'file:///etc/passwd']) {
+    assert(linkAction(u, '/d/doc.md').type === 'ignore', u);
+  }
+});
+
+test('relative markdown link resolves against the document directory', () => {
+  const r = linkAction('./notes/other.md', '/Users/me/docs/README.md');
+  assert(r.type === 'markdown' && r.path === '/Users/me/docs/notes/other.md');
+  const w = linkAction('sub\\x.markdown', 'C:\\docs\\a.md');
+  assert(w.type === 'markdown' && w.path === 'C:\\docs\\sub\\x.markdown', w.path);
+});
+
+test('query and fragment are stripped from file links', () => {
+  const r = linkAction('other.md?x=1#top', '/d/doc.md');
+  assert(r.type === 'markdown' && r.path === '/d/other.md');
+});
+
+test('non-markdown relative file is a local reveal', () => {
+  const r = linkAction('assets/pic.png', '/d/doc.md');
+  assert(r.type === 'local' && r.path === '/d/assets/pic.png');
+});
+
+test('relative link with no document path is inert, not resolved against a stale directory', () => {
+  assert(linkAction('other.md', null).type === 'ignore');
+});
+
+test('Windows drive-qualified absolute paths are files, not URI schemes (Codex P2)', () => {
+  const a = linkAction('C:/docs/next.md', 'C:\\docs\\a.md');
+  assert(a.type === 'markdown' && a.path === 'C:/docs/next.md', JSON.stringify(a));
+  const b = linkAction('D:\\files\\report.pdf', '/d/doc.md');
+  assert(b.type === 'local' && b.path === 'D:\\files\\report.pdf', JSON.stringify(b));
+});
+
+test('malformed percent escape does not throw (Codex P2)', () => {
+  let r;
+  try { r = linkAction('100%.md', '/d/doc.md'); } catch (e) { assert(false, 'threw: ' + e.message); }
+  assert(r.type === 'markdown' && r.path === '/d/100%.md', JSON.stringify(r));
+});
+
+test('click handler cannot fall through to navigation on error', () => {
+  const handler = html.match(/content\.addEventListener\('click', \(e\) => \{[\s\S]*?\n    \}\);\n/);
+  assert(handler, 'click handler not found');
+  assert(/try \{[\s\S]*\} catch/.test(handler[0]), 'handler must guard with try/catch');
+  assert(handler[0].includes('e.preventDefault()'));
+});
+
+test('picker/drop loads clear the stale document path (Codex P1)', () => {
+  const fn = html.match(/function handleFile\(file\) \{[\s\S]*?\n    \}\n/);
+  assert(fn, 'handleFile not found');
+  assert(fn[0].includes('currentFilePath = null'), 'handleFile must reset currentFilePath');
+});
+
 // --- Summary ---
 
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed\n`);
