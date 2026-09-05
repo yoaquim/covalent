@@ -666,21 +666,30 @@ test('new windows receive and scroll to the initial fragment', () => {
 const headingId = extractFn('headingId');
 
 test('headings get GitHub-style ids', () => {
-  const seen = new Map();
-  assert(headingId('Hello World!', seen) === 'hello-world');
-  assert(headingId('  Getting  Started ', seen) === 'getting--started', 'GitHub keeps one hyphen per space');
-  assert(headingId('snake_case_name', seen) === 'snake_case_name');
-  assert(headingId('API v2.0 / usage', seen) === 'api-v20--usage');
-  assert(headingId('<code>fn</code> main', seen) === 'fn-main', 'tags stripped');
-  assert(headingId('A &amp; B', seen) === 'a--b', 'entities decoded before slugging (Codex P2)');
-  assert(headingId('x &lt;T&gt; &quot;q&quot; it&#39;s', seen) === 'x-t-q-its', JSON.stringify(headingId('x &lt;T&gt; &quot;q&quot; it&#39;s', new Map())));
+  const used = new Set();
+  assert(headingId('Hello World!', used) === 'hello-world');
+  assert(headingId('  Getting  Started ', used) === 'getting--started', 'GitHub keeps one hyphen per space');
+  assert(headingId('snake_case_name', used) === 'snake_case_name');
+  assert(headingId('API v2.0 / usage', used) === 'api-v20--usage');
+  assert(headingId('<code>fn</code> main', used) === 'fn-main', 'tags stripped');
+  assert(headingId('A &amp; B', used) === 'a--b', 'entities decoded before slugging (Codex P2)');
+  assert(headingId('x &lt;T&gt; &quot;q&quot; it&#39;s', used) === 'x-t-q-its');
 });
 
 test('duplicate headings get numbered ids', () => {
-  const seen = new Map();
-  assert(headingId('Usage', seen) === 'usage');
-  assert(headingId('Usage', seen) === 'usage-1');
-  assert(headingId('Usage', seen) === 'usage-2');
+  const used = new Set();
+  assert(headingId('Usage', used) === 'usage');
+  assert(headingId('Usage', used) === 'usage-1');
+  assert(headingId('Usage', used) === 'usage-2');
+});
+
+test('generated ids never collide with a heading that already carries a suffix (Codex P2)', () => {
+  const used = new Set();
+  const ids = ['Usage', 'Usage', 'Usage-1', 'Usage'].map(h => headingId(h, used));
+  assert(new Set(ids).size === ids.length, 'duplicate id emitted: ' + ids.join(','));
+  assert(ids[2] === 'usage-1-1' && ids[3] === 'usage-2', ids.join(','));
+  const used2 = new Set();
+  assert(headingId('Usage-1', used2) === 'usage-1' && headingId('Usage', used2) === 'usage' && headingId('Usage', used2) === 'usage-2');
 });
 
 test('renderer emits heading ids', () => {
@@ -697,6 +706,15 @@ test('watchers are keyed per window, not app-wide', () => {
   assert(rs.includes('struct FileWatcher(Mutex<HashMap<String, notify::RecommendedWatcher>>)'), 'FileWatcher must be a per-label map');
   assert(/fn watch_file\([^)]*window: tauri::WebviewWindow/.test(rs), 'watch_file must know its window');
   assert(rs.includes('WindowEvent::Destroyed'), 'watchers must be dropped when a window closes');
+});
+
+test('".." never escapes a UNC share root (Codex P2)', () => {
+  assert(joinPath(String.raw`\\server\share`, String.raw`..\next.md`) === String.raw`\\server\share\next.md`);
+  assert(joinPath(String.raw`\\server\share\docs`, String.raw`..\next.md`) === String.raw`\\server\share\next.md`);
+  assert(joinPath(String.raw`\\server\share\docs`, String.raw`..\..\..\next.md`) === String.raw`\\server\share\next.md`);
+  assert(joinPath('/', '../x.md') === '/x.md');
+  assert(joinPath('C:\\', '..\\x.md') === 'C:\\x.md');
+  assert(joinPath('/a/b', '../c.md') === '/a/c.md');
 });
 
 // --- Summary ---

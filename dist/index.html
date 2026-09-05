@@ -562,17 +562,18 @@
     const renderer = new marked.Renderer();
 
     // GitHub-style heading ids so #fragment links (in-page and cross-document) resolve.
-    function headingId(text, seen) {
+    function headingId(text, used) {
       // Strip tags, then undo marked's HTML escaping so "A & B" slugs like GitHub ("a--b")
       const entities = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
       const plain = text.replace(/<[^>]*>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => entities[e]);
       // Same rules as GitHub: lowercase, drop punctuation except - and _, each space becomes a hyphen
-      let slug = plain.trim().toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-');
-      const n = seen.get(slug) || 0;
-      seen.set(slug, n + 1);
-      return n ? `${slug}-${n}` : slug;
+      const slug = plain.trim().toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-');
+      let id = slug;
+      for (let n = 1; used.has(id); n++) id = `${slug}-${n}`;
+      used.add(id);
+      return id;
     }
-    let headingSlugs = new Map();
+    let headingSlugs = new Set();
 
     renderer.heading = function({ tokens, depth }) {
       const text = this.parser.parseInline(tokens);
@@ -677,9 +678,11 @@
     function joinPath(baseDir, rel) {
       const sep = baseDir.includes('\\') ? '\\' : '/';
       const segs = baseDir.split(/[\\/]/);
+      // A UNC root (\\server\share) is indivisible: ".." must never pop server or share.
+      const rootSegs = /^[\\/]{2}[^\\/]/.test(baseDir) ? 4 : 1;
       for (const seg of rel.split(/[\\/]/)) {
         if (seg === '' || seg === '.') continue;
-        if (seg === '..') { if (segs.length > 1) segs.pop(); }
+        if (seg === '..') { if (segs.length > rootSegs) segs.pop(); }
         else segs.push(seg);
       }
       return segs.join(sep);
@@ -754,7 +757,7 @@
       lastMd = md;
       lastName = fileName;
 
-      headingSlugs = new Map();
+      headingSlugs = new Set();
       content.innerHTML = marked.parse(md);
       if (currentFilePath) rewriteRelativeAssets(dirname(currentFilePath));
       content.style.display = '';
