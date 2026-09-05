@@ -639,6 +639,64 @@ test('external and absolute image sources are untouched or kept absolute', () =>
   assert(resolveAssetPath('../up.png', '/d/docs') === '/d/up.png');
 });
 
+// --- Cross-document fragments and heading ids (Codex follow-up, #7) ---
+
+console.log('\nFragments and heading ids:');
+
+test('linkAction carries the fragment for markdown links', () => {
+  const r = linkAction('other.md#usage', '/d/doc.md');
+  assert(r.type === 'markdown' && r.path === '/d/other.md' && r.fragment === 'usage', JSON.stringify(r));
+  const enc = linkAction(renderedHref('[x](guide.md#getting%20started)'), '/d/doc.md');
+  assert(enc.fragment === 'getting started', JSON.stringify(enc));
+  assert(linkAction('other.md', '/d/doc.md').fragment === null);
+});
+
+test('click handler passes the fragment to open_new_window', () => {
+  assert(/invoke\('open_new_window',\s*\{\s*filePath:\s*action\.path,\s*fragment:\s*action\.fragment/.test(html));
+});
+
+test('new windows receive and scroll to the initial fragment', () => {
+  assert(html.includes('window.__INITIAL_FRAGMENT__'));
+  assert(html.includes('function scrollToFragment('));
+  const rs = readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf-8');
+  assert(rs.includes('__INITIAL_FRAGMENT__'), 'Rust must inject the fragment');
+  assert(/fn open_new_window\([^)]*fragment: Option<String>/.test(rs), 'open_new_window must accept fragment');
+});
+
+const headingId = extractFn('headingId');
+
+test('headings get GitHub-style ids', () => {
+  const seen = new Map();
+  assert(headingId('Hello World!', seen) === 'hello-world');
+  assert(headingId('  Getting  Started ', seen) === 'getting--started', 'GitHub keeps one hyphen per space');
+  assert(headingId('snake_case_name', seen) === 'snake_case_name');
+  assert(headingId('API v2.0 / usage', seen) === 'api-v20--usage');
+  assert(headingId('<code>fn</code> main', seen) === 'fn-main', 'tags stripped');
+});
+
+test('duplicate headings get numbered ids', () => {
+  const seen = new Map();
+  assert(headingId('Usage', seen) === 'usage');
+  assert(headingId('Usage', seen) === 'usage-1');
+  assert(headingId('Usage', seen) === 'usage-2');
+});
+
+test('renderer emits heading ids', () => {
+  assert(html.includes('renderer.heading = function'));
+  assert(/<h\$\{depth\} id="\$\{id\}">/.test(html));
+});
+
+// --- Per-window file watchers (Codex follow-up) ---
+
+console.log('\nPer-window file watchers:');
+
+test('watchers are keyed per window, not app-wide', () => {
+  const rs = readFileSync(new URL('../src-tauri/src/main.rs', import.meta.url), 'utf-8');
+  assert(rs.includes('struct FileWatcher(Mutex<HashMap<String, notify::RecommendedWatcher>>)'), 'FileWatcher must be a per-label map');
+  assert(/fn watch_file\([^)]*window: tauri::WebviewWindow/.test(rs), 'watch_file must know its window');
+  assert(rs.includes('WindowEvent::Destroyed'), 'watchers must be dropped when a window closes');
+});
+
 // --- Summary ---
 
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed\n`);

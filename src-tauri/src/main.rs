@@ -3,10 +3,11 @@
     windows_subsystem = "windows"
 )]
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use notify::{Watcher, RecursiveMode, Event, EventKind};
 
 #[cfg(target_os = "macos")]
@@ -25,10 +26,17 @@ extern "C" {
 
 struct OpenedFiles(Mutex<Vec<String>>);
 struct FrontendReady(AtomicU32);
-struct FileWatcher(Mutex<Option<notify::RecommendedWatcher>>);
+/// One file watcher per window label, so opening a second document never
+/// silently stops live reload in the first window.
+struct FileWatcher(Mutex<HashMap<String, notify::RecommendedWatcher>>);
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 
-fn create_window(app: &AppHandle, file_path: Option<&str>) -> Result<(), String> {
+/// Escape a string for embedding inside a double-quoted JS string literal.
+fn js_string_literal(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn create_window(app: &AppHandle, file_path: Option<&str>, fragment: Option<&str>) -> Result<(), String> {
     let id = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed);
     let label = format!("window-{}", id);
 
@@ -43,11 +51,14 @@ fn create_window(app: &AppHandle, file_path: Option<&str>) -> Result<(), String>
     }
 
     if let Some(path) = file_path {
-        let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
-        builder = builder.initialization_script(&format!(
-            "window.__INITIAL_FILE__ = \"{}\";",
-            escaped
-        ));
+        let mut script = format!("window.__INITIAL_FILE__ = \"{}\";", js_string_literal(path));
+        if let Some(frag) = fragment.filter(|f| !f.is_empty()) {
+            script.push_str(&format!(
+                " window.__INITIAL_FRAGMENT__ = \"{}\";",
+                js_string_literal(frag)
+            ));
+        }
+        builder = builder.initialization_script(&script);
     }
 
     builder.build().map_err(|e: tauri::Error| e.to_string())?;
@@ -88,14 +99,21 @@ fn set_default_md_viewer() -> Result<(), String> {
 }
 
 #[tauri::command]
-fn watch_file(app: AppHandle, path: String, watcher_state: State<FileWatcher>) -> Result<(), String> {
+fn watch_file(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    path: String,
+    watcher_state: State<FileWatcher>,
+) -> Result<(), String> {
     let watch_path = PathBuf::from(&path);
     let app_handle = app.clone();
+    let label = window.label().to_string();
+    let target = label.clone();
 
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
         if let Ok(event) = res {
             if matches!(event.kind, EventKind::Modify(_)) {
-                let _ = app_handle.emit("file-changed", path.clone());
+                let _ = app_handle.emit_to(&target, "file-changed", path.clone());
             }
         }
     }).map_err(|e| e.to_string())?;
@@ -103,14 +121,14 @@ fn watch_file(app: AppHandle, path: String, watcher_state: State<FileWatcher>) -
     watcher.watch(watch_path.as_path(), RecursiveMode::NonRecursive)
         .map_err(|e| e.to_string())?;
 
-    // Store watcher so it doesn't get dropped
-    *watcher_state.0.lock().unwrap() = Some(watcher);
+    // Replaces only this window's previous watcher; other windows keep theirs.
+    watcher_state.0.lock().unwrap().insert(label, watcher);
     Ok(())
 }
 
 #[tauri::command]
-fn open_new_window(app: AppHandle, file_path: Option<String>) -> Result<(), String> {
-    create_window(&app, file_path.as_deref())
+fn open_new_window(app: AppHandle, file_path: Option<String>, fragment: Option<String>) -> Result<(), String> {
+    create_window(&app, file_path.as_deref(), fragment.as_deref())
 }
 
 #[cfg(target_os = "macos")]
@@ -173,15 +191,26 @@ mod tests {
     #[test]
     fn path_escape_backslashes() {
         let path = r"C:\Users\test\file.md";
-        let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
-        assert_eq!(escaped, r"C:\\Users\\test\\file.md");
+        assert_eq!(js_string_literal(path), r"C:\\Users\\test\\file.md");
     }
 
     #[test]
     fn path_escape_quotes() {
         let path = r#"/path/to/"quoted".md"#;
-        let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
-        assert_eq!(escaped, r#"/path/to/\"quoted\".md"#);
+        assert_eq!(js_string_literal(path), r#"/path/to/\"quoted\".md"#);
+    }
+
+    #[test]
+    fn watchers_are_kept_per_window() {
+        let state = FileWatcher(Mutex::new(HashMap::new()));
+        let mk = || notify::recommended_watcher(|_| {}).unwrap();
+        state.0.lock().unwrap().insert("main".to_string(), mk());
+        state.0.lock().unwrap().insert("window-2".to_string(), mk());
+        assert_eq!(state.0.lock().unwrap().len(), 2, "second window must not evict the first");
+        state.0.lock().unwrap().insert("window-2".to_string(), mk());
+        assert_eq!(state.0.lock().unwrap().len(), 2, "re-watching replaces only that window's watcher");
+        state.0.lock().unwrap().remove("window-2");
+        assert!(state.0.lock().unwrap().contains_key("main"));
     }
 
     #[test]
@@ -197,7 +226,14 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(OpenedFiles(Mutex::new(Vec::new())))
         .manage(FrontendReady(AtomicU32::new(0)))
-        .manage(FileWatcher(Mutex::new(None)));
+        .manage(FileWatcher(Mutex::new(HashMap::new())))
+        .on_window_event(|window, event| {
+            if let WindowEvent::Destroyed = event {
+                if let Some(state) = window.app_handle().try_state::<FileWatcher>() {
+                    state.0.lock().unwrap().remove(window.label());
+                }
+            }
+        });
 
     #[cfg(target_os = "macos")]
     {
