@@ -667,16 +667,17 @@
     // open in a new Covalent window, and other relative paths are revealed in the
     // file manager (never executed/opened).
     function linkAction(href, baseFile) {
-      if (!href) return null;
+      if (href == null) return null;
       if (href.startsWith('#')) return { type: 'anchor' };
       if (href.startsWith('//')) return { type: 'external', url: 'https:' + href };
       if (/^(https?|mailto|tel):/i.test(href)) return { type: 'external', url: href };
-      // Windows drive paths (C:/x, C:\x) look like a URI scheme; recognise them first.
-      const isWinAbs = /^[a-zA-Z]:[\\/]/.test(href);
-      if (!isWinAbs && /^[a-z][a-z0-9+.-]*:/i.test(href)) return { type: 'ignore' }; // file:, data:, javascript:, ...
+      // Work on the decoded path part: marked percent-encodes backslashes and spaces.
       let clean = href.split(/[?#]/)[0];
       try { clean = decodeURIComponent(clean); } catch (_) { /* literal %, keep as-is */ }
-      if (!clean) return { type: 'anchor' };
+      if (!clean) return { type: 'ignore' }; // empty or query-only: would reload the viewer
+      // Windows drive paths (C:/x, C:\x) look like a URI scheme; recognise them first.
+      const isWinAbs = /^[a-zA-Z]:[\\/]/.test(clean);
+      if (!isWinAbs && /^[a-z][a-z0-9+.-]*:/i.test(clean)) return { type: 'ignore' }; // file:, data:, javascript:, ...
       const abs = isAbsoluteFsPath(clean) ? clean : (baseFile ? joinPath(dirname(baseFile), clean) : null);
       if (!abs) return { type: 'ignore' };
       if (/\.(md|markdown|mdx)$/i.test(clean)) return { type: 'markdown', path: abs };

@@ -570,6 +570,44 @@ test('picker/drop loads clear the stale document path (Codex P1)', () => {
   assert(fn[0].includes('currentFilePath = null'), 'handleFile must reset currentFilePath');
 });
 
+// Links as the real renderer emits them: marked percent-encodes backslashes and
+// spaces, so classify the href marked actually produces, not the Markdown source.
+import { createRequire } from 'module';
+const { marked: realMarked } = createRequire(import.meta.url)('../dist/vendor/marked/18.0.11/marked.umd.js');
+const renderedHref = (md) => realMarked.parse(md).match(/href="([^"]*)"/)?.[1] ?? null;
+
+test('marked encodes backslashes; Windows absolute link still opens (Codex P2 follow-up)', () => {
+  const href = renderedHref('[x](C:\\docs\\next.md)');
+  assert(href === 'C:%5Cdocs%5Cnext.md', 'renderer output changed: ' + href);
+  const r = linkAction(href, 'C:\\docs\\a.md');
+  assert(r.type === 'markdown' && r.path === 'C:\\docs\\next.md', JSON.stringify(r));
+});
+
+test('encoded relative Windows link resolves against the document', () => {
+  const r = linkAction(renderedHref('[x](sub\\x.markdown)'), 'C:\\docs\\a.md');
+  assert(r.type === 'markdown' && r.path === 'C:\\docs\\sub\\x.markdown', JSON.stringify(r));
+});
+
+test('encoded space in filename is decoded', () => {
+  const r = linkAction(renderedHref('[x](<my file.md>)'), '/d/doc.md');
+  assert(r.type === 'markdown' && r.path === '/d/my file.md', JSON.stringify(r));
+});
+
+test('query-only link never navigates the viewer (Codex P2 follow-up)', () => {
+  const r = linkAction(renderedHref('[x](?view=compact)'), '/d/doc.md');
+  assert(r.type === 'ignore', JSON.stringify(r));
+});
+
+test('empty link never navigates the viewer', () => {
+  assert(renderedHref('[x]()') === '');
+  const r = linkAction('', '/d/doc.md');
+  assert(r && r.type === 'ignore', JSON.stringify(r));
+});
+
+test('percent-encoded scheme is still inert', () => {
+  assert(linkAction('javascript%3Aalert(1)', '/d/doc.md').type === 'ignore');
+});
+
 // --- Summary ---
 
 console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed\n`);
