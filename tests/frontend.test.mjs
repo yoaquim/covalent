@@ -203,25 +203,16 @@ function isExternalUrl(url) {
          url.startsWith('//') || url.startsWith('#');
 }
 
-function isAbsoluteFsPath(path) {
-  return path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path);
+// Path helpers are taken from the real source in index.html so tests can't drift from the app.
+const appSrc = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf-8');
+function extractFn(name) {
+  const m = appSrc.match(new RegExp(`    function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n    \\}\\n`));
+  if (!m) throw new Error(`${name} not found in index.html`);
+  return new Function(m[0] + `\nreturn ${name};`)();
 }
-
-function dirname(filePath) {
-  const lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
-  return lastSep >= 0 ? filePath.slice(0, lastSep) : '';
-}
-
-function joinPath(baseDir, rel) {
-  const sep = baseDir.includes('\\') ? '\\' : '/';
-  const segs = baseDir.split(/[\\/]/);
-  for (const seg of rel.split(/[\\/]/)) {
-    if (seg === '' || seg === '.') continue;
-    if (seg === '..') { if (segs.length > 1) segs.pop(); }
-    else segs.push(seg);
-  }
-  return segs.join(sep);
-}
+const isAbsoluteFsPath = extractFn('isAbsoluteFsPath');
+const dirname = extractFn('dirname');
+const joinPath = extractFn('joinPath');
 
 test('external https URL detected', () => assert(isExternalUrl('https://example.com/x.png')));
 test('external http URL detected', () => assert(isExternalUrl('http://example.com/x.png')));
@@ -606,6 +597,15 @@ test('empty link never navigates the viewer', () => {
 
 test('percent-encoded scheme is still inert', () => {
   assert(linkAction('javascript%3Aalert(1)', '/d/doc.md').type === 'ignore');
+});
+
+test('UNC share links are absolute, not joined onto the document folder (Codex P2)', () => {
+  // In Markdown, "\\" is an escaped backslash, so a UNC target is written \\\\server\\share\\next.md
+  const href = renderedHref(String.raw`[x](\\\\server\\share\\next.md)`);
+  assert(href === '%5C%5Cserver%5Cshare%5Cnext.md', 'renderer output changed: ' + href);
+  const r = linkAction(href, String.raw`C:\docs\a.md`);
+  assert(r.type === 'markdown' && r.path === String.raw`\\server\share\next.md`, JSON.stringify(r));
+  assert(isAbsoluteFsPath(String.raw`\\server\share\img.png`), 'images on shares are absolute too');
 });
 
 // --- Summary ---

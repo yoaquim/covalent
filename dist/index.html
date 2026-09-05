@@ -642,7 +642,8 @@
     }
 
     function isAbsoluteFsPath(path) {
-      return path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(path);
+      // POSIX root, Windows drive (C:\ or C:/), or UNC share (\\server\share)
+      return path.startsWith('/') || path.startsWith('\\\\') || /^[a-zA-Z]:[\\/]/.test(path);
     }
 
     function dirname(filePath) {
