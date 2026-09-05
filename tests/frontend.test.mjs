@@ -211,6 +211,7 @@ const isAbsoluteFsPath = extractFn('isAbsoluteFsPath');
 const dirname = extractFn('dirname');
 const joinPath = extractFn('joinPath');
 const safeDecode = extractFn('safeDecode');
+const resolveAgainst = extractFn('resolveAgainst', { isAbsoluteFsPath, joinPath });
 
 test('external https URL detected', () => assert(isExternalUrl('https://example.com/x.png')));
 test('external http URL detected', () => assert(isExternalUrl('http://example.com/x.png')));
@@ -485,7 +486,7 @@ test('opener:default permission granted to all windows', () => {
 // linkAction is exercised from the real source in index.html (extracted, not copied)
 const linkActionSrc = html.match(/    function linkAction\(href, baseFile\) \{[\s\S]*?\n    \}\n/);
 const linkAction = linkActionSrc
-  ? new Function('isAbsoluteFsPath', 'dirname', 'joinPath', 'safeDecode', linkActionSrc[0] + '\nreturn linkAction;')(isAbsoluteFsPath, dirname, joinPath, safeDecode)
+  ? new Function('isAbsoluteFsPath', 'dirname', 'joinPath', 'safeDecode', 'resolveAgainst', linkActionSrc[0] + '\nreturn linkAction;')(isAbsoluteFsPath, dirname, joinPath, safeDecode, resolveAgainst)
   : null;
 
 test('linkAction is defined in index.html', () => assert(typeof linkAction === 'function'));
@@ -607,7 +608,7 @@ test('UNC share links are absolute, not joined onto the document folder (Codex P
 });
 
 // Image sources as marked emits them (percent-encoded), resolved by the real helper
-const resolveAssetPath = extractFn('resolveAssetPath', { isExternalUrl, safeDecode, isAbsoluteFsPath, joinPath });
+const resolveAssetPath = extractFn('resolveAssetPath', { isExternalUrl, safeDecode, resolveAgainst });
 const renderedSrc = (md) => realMarked.parse(md).match(/src="([^"]*)"/)?.[1] ?? null;
 
 test('resolveAssetPath is used by rewriteRelativeAssets', () => {
@@ -663,7 +664,12 @@ test('new windows receive and scroll to the initial fragment', () => {
   assert(/fn open_new_window\([^)]*fragment: Option<String>/.test(rs), 'open_new_window must accept fragment');
 });
 
-const headingId = extractFn('headingId');
+// Node has no DOM, so the tests inject a small entity decoder; the browser build uses a <textarea>.
+const nodeDecodeEntities = (str) => str
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+  .replace(/&(amp|lt|gt|quot|apos|copy|nbsp);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", copy: '\u00a9', nbsp: '\u00a0' })[e]);
+const headingId = extractFn('headingId', { decodeEntities: nodeDecodeEntities });
 
 test('headings get GitHub-style ids', () => {
   const used = new Set();
@@ -674,6 +680,13 @@ test('headings get GitHub-style ids', () => {
   assert(headingId('<code>fn</code> main', used) === 'fn-main', 'tags stripped');
   assert(headingId('A &amp; B', used) === 'a--b', 'entities decoded before slugging (Codex P2)');
   assert(headingId('x &lt;T&gt; &quot;q&quot; it&#39;s', used) === 'x-t-q-its');
+  assert(headingId('A &copy; B', new Set()) === 'a--b', 'named entity beyond the basic five (Codex P2)');
+  assert(headingId('A &#169; B', new Set()) === 'a--b', 'decimal entity');
+  assert(headingId('A &#xA9; B', new Set()) === 'a--b', 'hex entity');
+});
+test('browser build decodes entities with the DOM', () => {
+  const fn = html.match(/    function decodeEntities\(str\) \{[\s\S]*?\n    \}\n/);
+  assert(fn && fn[0].includes("createElement('textarea')") && fn[0].includes('.innerHTML') && fn[0].includes('.value'));
 });
 
 test('duplicate headings get numbered ids', () => {
@@ -740,6 +753,18 @@ test('a broken Mermaid diagram never rejects rendering or skips the file watcher
   const renderCatch = body.indexOf('catch', render);
   const watch = body.indexOf("invoke('watch_file'");
   assert(render >= 0 && renderCatch >= 0 && watch > renderCatch, 'watch_file must run after the render try/catch, not inside it');
+});
+
+test('single-backslash links are drive-rooted on Windows (Codex P2)', () => {
+  const href = renderedHref(String.raw`[x](\next.md)`);
+  assert(href === '%5Cnext.md', 'renderer output changed: ' + href);
+  const drive = linkAction(href, String.raw`C:\docs\deep\a.md`);
+  assert(drive.type === 'markdown' && drive.path === String.raw`C:\next.md`, JSON.stringify(drive));
+  const unc = linkAction(href, String.raw`\\server\share\docs\a.md`);
+  assert(unc.path === String.raw`\\server\share\next.md`, JSON.stringify(unc));
+  const posix = linkAction(href, '/d/docs/a.md');
+  assert(posix.path === '/d/docs/next.md', 'POSIX base keeps joining: ' + JSON.stringify(posix));
+  assert(resolveAssetPath('%5Cpic.png', String.raw`C:\docs`) === String.raw`C:\pic.png`);
 });
 
 // --- Summary ---

@@ -562,10 +562,16 @@
     const renderer = new marked.Renderer();
 
     // GitHub-style heading ids so #fragment links (in-page and cross-document) resolve.
+    // Decode every HTML entity (named, decimal, hex) the way a browser would.
+    function decodeEntities(str) {
+      const ta = document.createElement('textarea');
+      ta.innerHTML = str;
+      return ta.value;
+    }
+
     function headingId(text, used) {
-      // Strip tags, then undo marked's HTML escaping so "A & B" slugs like GitHub ("a--b")
-      const entities = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
-      const plain = text.replace(/<[^>]*>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => entities[e]);
+      // Strip tags, then decode entities so "A &amp; B" and "A &copy; B" slug like GitHub
+      const plain = decodeEntities(text.replace(/<[^>]*>/g, ''));
       // Same rules as GitHub: lowercase, drop punctuation except - and _, each space becomes a hyphen
       const slug = plain.trim().toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/ /g, '-');
       let id = slug;
@@ -678,6 +684,7 @@
     function joinPath(baseDir, rel) {
       const sep = baseDir.includes('\\') ? '\\' : '/';
       const segs = baseDir.split(/[\\/]/);
+      while (segs.length > 1 && segs[segs.length - 1] === '') segs.pop(); // "C:\\" or "/" bases
       // A UNC root (\\server\share) is indivisible: ".." must never pop server or share.
       const rootSegs = /^[\\/]{2}[^\\/]/.test(baseDir) ? 4 : 1;
       for (const seg of rel.split(/[\\/]/)) {
@@ -686,6 +693,18 @@
         else segs.push(seg);
       }
       return segs.join(sep);
+    }
+
+    // Resolve a decoded link/image path against the current document's directory.
+    // A single leading backslash is drive-rooted on Windows: keep the base's drive or UNC share.
+    function resolveAgainst(baseDir, rel) {
+      if (isAbsoluteFsPath(rel)) return rel;
+      if (!baseDir) return null;
+      if (rel.startsWith('\\')) {
+        const root = baseDir.match(/^([a-zA-Z]:|[\\/]{2}[^\\/]+[\\/][^\\/]+)/);
+        if (root) return joinPath(root[0] + '\\', rel);
+      }
+      return joinPath(baseDir, rel);
     }
 
     // --- Link handling ---
@@ -706,8 +725,7 @@
       // Windows drive paths (C:/x, C:\x) look like a URI scheme; recognise them first.
       const isWinAbs = /^[a-zA-Z]:[\\/]/.test(clean);
       if (!isWinAbs && /^[a-z][a-z0-9+.-]*:/i.test(clean)) return { type: 'ignore' }; // file:, data:, javascript:, ...
-      const baseDir = baseFile ? dirname(baseFile) : '';
-      const abs = isAbsoluteFsPath(clean) ? clean : (baseDir ? joinPath(baseDir, clean) : null);
+      const abs = resolveAgainst(baseFile ? dirname(baseFile) : '', clean);
       if (!abs) return { type: 'ignore' };
       if (/\.(md|markdown|mdx)$/i.test(clean)) return { type: 'markdown', path: abs, fragment };
       return { type: 'local', path: abs };
@@ -740,9 +758,7 @@
     // marked percent-encodes backslashes and spaces, so decode before path checks.
     function resolveAssetPath(src, baseDir) {
       if (!src || isExternalUrl(src)) return null;
-      const decoded = safeDecode(src);
-      if (isAbsoluteFsPath(decoded)) return decoded;
-      return baseDir ? joinPath(baseDir, decoded) : null;
+      return resolveAgainst(baseDir, safeDecode(src));
     }
 
     function rewriteRelativeAssets(baseDir) {
