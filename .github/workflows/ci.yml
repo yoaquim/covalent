@@ -58,6 +58,8 @@ jobs:
     needs: [audit, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
+      # A failure on one platform must not cancel the other's build/upload.
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -116,49 +118,6 @@ jobs:
             src-tauri/target/release/bundle/macos/*.app
           draft: false
           generate_release_notes: true
-
-      - name: Update Homebrew tap
-        if: matrix.os == 'macos-latest'
-        env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
-          DMG_PATH=$(ls src-tauri/target/release/bundle/dmg/*.dmg)
-          SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
-
-          cat > /tmp/covalent.rb <<'RUBY'
-          cask "covalent" do
-            version "VERSION_PLACEHOLDER"
-            sha256 "SHA256_PLACEHOLDER"
-
-            url "https://github.com/yoaquim/covalent/releases/download/v#{version}/Covalent_#{version}_aarch64.dmg"
-            name "Covalent"
-            desc "Native Markdown viewer with math, diagrams, and syntax highlighting"
-            homepage "https://github.com/yoaquim/covalent"
-
-            app "Covalent.app"
-
-            postflight do
-              system_command "/usr/bin/xattr",
-                             args: ["-cr", "#{appdir}/Covalent.app"]
-            end
-          end
-          RUBY
-
-          sed -i '' 's/^          //' /tmp/covalent.rb
-          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/" /tmp/covalent.rb
-          sed -i '' "s/SHA256_PLACEHOLDER/$SHA256/" /tmp/covalent.rb
-
-          CONTENT=$(base64 -i /tmp/covalent.rb)
-          FILE_SHA=$(curl -s -H "Authorization: Bearer $TAP_TOKEN" \
-            https://api.github.com/repos/yoaquim/homebrew-tap/contents/Casks/covalent.rb \
-            | python3 -c "import sys,json; print(json.load(sys.stdin)['sha'])")
-
-          curl -s -X PUT \
-            -H "Authorization: Bearer $TAP_TOKEN" \
-            -H "Content-Type: application/json" \
-            https://api.github.com/repos/yoaquim/homebrew-tap/contents/Casks/covalent.rb \
-            -d "{\"message\":\"Update Covalent to ${VERSION}\",\"content\":\"${CONTENT}\",\"sha\":\"${FILE_SHA}\"}"
 
       - name: Upload to Release (Windows)
         if: matrix.os == 'windows-latest'
