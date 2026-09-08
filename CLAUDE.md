@@ -61,7 +61,7 @@ Every push to `main` triggers the full CI pipeline:
 2. If both pass, builds macOS (.dmg) and Windows (.exe) in parallel
 3. Auto-tags from version in `tauri.conf.json`
 4. Uploads artifacts to GitHub Release
-5. Auto-updates the Homebrew tap (`yoaquim/homebrew-tap`) with new version + sha256
+5. The Homebrew tap (`yoaquim/homebrew-tap`) updates itself on a schedule by polling GitHub releases; this repo no longer pushes to it
 
 Concurrency control cancels stale runs when new pushes arrive.
 
